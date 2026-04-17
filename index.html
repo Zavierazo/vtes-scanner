@@ -807,7 +807,7 @@
 
             const confClass = data.confidence >= 60 ? 'high' : data.confidence >= 35 ? 'medium' : 'low';
             const barClass = confClass === 'high' ? '' : confClass;
-            const cdnImage = `https://cdn.vtesdecks.com/img/cards/${data.id}.jpg`;
+            const cdnImage = data.set ? `https://cdn.vtesdecks.com/img/cards/sets/${data.set}/${data.id}.jpg` : `https://cdn.vtesdecks.com/img/cards/${data.id}.jpg`;
 
             // Fetch card details from API
             let cardName = data.id;
@@ -835,7 +835,7 @@
             if (altsMeta.length > 0) {
                 altsHtml = `<p class="alts-title">Other possibilities</p>`;
                 altsMeta.forEach(a => {
-                    const altImg = `https://cdn.vtesdecks.com/img/cards/${a.id}.jpg`;
+                    const altImg = a.set ? `https://cdn.vtesdecks.com/img/cards/sets/${a.set}/${a.id}.jpg` : `https://cdn.vtesdecks.com/img/cards/${a.id}.jpg`;
                     const altConfClass = a.altConf >= 60 ? '' : a.altConf >= 35 ? 'medium' : 'low';
                     altsHtml += `
                     <div class="alt-item">
