@@ -40,7 +40,7 @@ def load_index():
     # This directly reduces Hamming distance computations in Phase 1 (per-card loop)
     # without requiring an index rebuild: knnMatch(500 query, ~1000 train) is 2× faster
     # than knnMatch(1000 query, ~1000 train) while the 4-match threshold still holds.
-    ORB = cv2.ORB_create(nfeatures=500)
+    ORB = cv2.ORB_create(nfeatures=100)
     BF_MATCHER = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=False)
     CLAHE = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
 
@@ -92,7 +92,7 @@ def match_card(img_gray: np.ndarray, top_k: int = 10):
     has_keypoints = "keypoints" in raw[0][1]
     if has_keypoints:
         verified = []
-        for _, entry, good_matches in raw[:20]:
+        for _, entry, good_matches in raw[:40]:
             kp_train = entry["keypoints"]  # (N, 2) float32
 
             src_pts = np.float32(
