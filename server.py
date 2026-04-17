@@ -105,25 +105,24 @@ def match_card(img_gray: np.ndarray, top_k: int = 5):
 
         verified.sort(key=lambda x: x[0], reverse=True)
         scores = verified
+        # Absolute scale: 20 inliers → 100%. Anything above is still capped at 100%.
+        conf_scale = 5
     else:
         # Legacy index without keypoints: fall back to raw match count
         scores = [(c, e) for c, e, _ in raw]
+        # Absolute scale: 50 raw matches → 100%.
+        conf_scale = 2
 
     if not scores or scores[0][0] < 4:
         return None, []
 
     best_score, best_entry = scores[0]
 
-    # Convert raw scores (inliers or match counts) to a relative confidence
-    # so the best candidate is always 100% and alternatives are scaled
-    # consistently: confidence = round(score / best_score * 100).
+    # Absolute confidence: score × scale, capped at 100%.
+    # Both main result and alternatives use the same scale so the values are
+    # honestly comparable — a weak best match will show e.g. 45%, not 100%.
     def score_to_conf(s):
-        try:
-            if best_score <= 0:
-                return 0
-            return min(100, int(round((s / best_score) * 100)))
-        except Exception:
-            return 0
+        return min(100, int(round(s * conf_scale)))
 
     result = {
         "id": best_entry["id"],
