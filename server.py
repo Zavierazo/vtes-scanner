@@ -21,6 +21,7 @@ INDEX_FILE = "card_index.pkl"
 INDEX = []
 ORB = None
 BF_MATCHER = None
+MIN_ALT_CONF = 20  # Minimum confidence (%) for alternatives to be included in results
 
 def load_index():
     global INDEX, ORB, BF_MATCHER
@@ -41,7 +42,7 @@ def load_index():
     return True
 
 
-def match_card(img_gray: np.ndarray, top_k: int = 20):
+def match_card(img_gray: np.ndarray, top_k: int = 8):
     """
     Two-phase matching:
       1. Fast ratio-test filter over the full index.
@@ -135,8 +136,7 @@ def match_card(img_gray: np.ndarray, top_k: int = 20):
 
     # Include all alternatives including same card in different sets.
     # Deduplicate by (id, set) pair — keep the highest-scoring entry per pair.
-    # Only include alternatives with at least 10% confidence; cap at top_k-1.
-    MIN_ALT_CONF = 10
+    
     seen = {(best_entry["id"], best_entry["set"])}
     alternatives = []
     for score, entry in scores[1:]:
@@ -145,6 +145,7 @@ def match_card(img_gray: np.ndarray, top_k: int = 20):
             continue
         seen.add(key)
         alt_conf = score_to_conf(score)
+        # Only include alternatives with at least 10% confidence; cap at top_k-1.
         if alt_conf < MIN_ALT_CONF:
             continue
         alternatives.append({
