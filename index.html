@@ -623,13 +623,16 @@
         }
 
         // Single-button state machine
+        // States: idle → camera → scanning → result → camera → ...
         async function handleMainBtn() {
             if (appState === 'idle') {
                 await startCamera();
             } else if (appState === 'camera') {
                 await doScan();
+            } else if (appState === 'result') {
+                scanAgain();
             }
-            // 'scanning' state: button is disabled, nothing to do
+            // 'scanning' state: button is disabled
         }
 
         async function startCamera() {
@@ -742,18 +745,19 @@
             resultPanel.classList.remove('visible');
             resultContent.innerHTML = '';
             appState = 'camera';
+            mainBtn.textContent = 'Scan Card';
             mainBtn.disabled = false;
         }
 
         async function renderResult(data) {
-            const scanAgainBtn = `<button onclick="scanAgain()" style="margin-top:0.75rem;width:100%;">Scan again</button>`;
-
             if (!data.found) {
                 resultContent.innerHTML = `
       <div style="padding:1.25rem;">
-        <div class="not-found" style="padding:0;margin-bottom:0.75rem;">&#9888; ${data.message || 'Card not identified. Try better lighting.'}</div>
-        ${scanAgainBtn}
+        <div class="not-found" style="padding:0;">&#9888; ${data.message || 'Card not identified. Try better lighting.'}</div>
       </div>`;
+                appState = 'result';
+                mainBtn.textContent = 'Scan Again';
+                mainBtn.disabled = false;
                 return;
             }
 
@@ -825,8 +829,10 @@
         <div class="elapsed">Time: ${data.elapsed_ms}ms &middot; Score: ${data.score}</div>
       </div>
     </div>
-    <div style="padding:0 1.25rem;">${altsHtml}</div>
-    <div style="padding:0.75rem 1.25rem 1.25rem;">${scanAgainBtn}</div>`;
+    <div style="padding:0 1.25rem 1.25rem;">${altsHtml}</div>`;
+            appState = 'result';
+            mainBtn.textContent = 'Scan Again';
+            mainBtn.disabled = false;
         }
 
         checkServer();
