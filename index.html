@@ -26,6 +26,7 @@
             --radius: 4px;
         }
 
+
         * {
             box-sizing: border-box;
             margin: 0;
@@ -631,6 +632,25 @@
             font-size: 18px;
             cursor: pointer;
         }
+
+        /* Button spinner */
+        .btn-spinner {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid rgba(255, 255, 255, 0.25);
+            border-top-color: var(--gold);
+            border-radius: 50%;
+            margin-right: 8px;
+            vertical-align: middle;
+            animation: spin 0.9s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
     </style>
 </head>
 
@@ -731,6 +751,25 @@
                 statusDot.className = 'status-dot error';
                 statusText.textContent = 'Cannot connect to server';
                 setTimeout(checkServer, 3000);
+            }
+        }
+
+        // Button spinner helpers (defined in script scope)
+        function showButtonSpinner(text) {
+            try { mainBtn.dataset.orig = mainBtn.textContent; } catch (e) { }
+            mainBtn.disabled = true;
+            mainBtn.classList.add('loading');
+            mainBtn.innerHTML = `<span class="btn-spinner" aria-hidden="true"></span>${text}`;
+        }
+
+        function hideButtonSpinner() {
+            mainBtn.classList.remove('loading');
+            mainBtn.disabled = false;
+            if (mainBtn.dataset && mainBtn.dataset.orig) {
+                mainBtn.textContent = mainBtn.dataset.orig;
+                delete mainBtn.dataset.orig;
+            } else {
+                mainBtn.textContent = 'Scan Card';
             }
         }
 
@@ -846,9 +885,12 @@
             // Show loading state in result panel
             resultPanel.classList.add('visible');
             resultContent.innerHTML = `
-    <div style="padding:1rem 1.25rem;font-style:italic;color:var(--text-dim);font-size:15px;">
-      Comparing against the dataset...
-    </div>`;
+        <div style="padding:1rem 1.25rem;font-style:italic;color:var(--text-dim);font-size:15px;">
+            Comparing against the dataset...
+        </div>`;
+            // show inline spinner in the main button and scroll user to results
+            showButtonSpinner('Scanning...');
+            resultPanel.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
             // Release the camera immediately after capturing so the browser
             // frees the device while the server processes the image.
@@ -862,11 +904,16 @@
                 });
                 const data = await resp.json();
                 await renderResult(data);
+                hideButtonSpinner();
+                // ensure results are visible to the user (in case renderResult adjusted layout)
+                resultPanel.scrollIntoView({ behavior: 'smooth', block: 'center' });
             } catch (e) {
+                hideButtonSpinner();
                 resultContent.innerHTML = `<div class="not-found">Server connection error.</div>`;
                 appState = 'result';
                 mainBtn.textContent = 'Scan Again';
                 mainBtn.disabled = false;
+                resultPanel.scrollIntoView({ behavior: 'smooth', block: 'center' });
             } finally {
                 scanLine.classList.remove('scanning');
             }
@@ -955,7 +1002,7 @@
 
             resultContent.innerHTML = `
     <div style="display:flex;gap:14px;align-items:flex-start;padding:1.25rem 1.25rem 0;">
-     <img src="${cdnImage}" alt="${cardName}"
+     <img class="main-preview" src="${cdnImage}" alt="${cardName}"
          style="width:90px;flex-shrink:0;border-radius:4px;border:0.5px solid var(--border-bright);object-fit:cover;cursor:zoom-in;"
          onclick="openPreview('${cdnImage}', '${cardName}')"
          onerror="this.style.display='none'" />
