@@ -525,7 +525,43 @@
             color: var(--text-dim);
             font-style: italic;
             margin-top: 1rem;
+            margin-bottom: 1rem;
             opacity: 0.7;
+        }
+
+        /* Preview modal */
+        .preview-modal {
+            position: fixed;
+            inset: 0;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 9999;
+            padding: 24px;
+        }
+
+        .preview-modal.visible {
+            display: flex;
+        }
+
+        .preview-modal img {
+            max-width: 96%;
+            max-height: 96%;
+            border-radius: 6px;
+            box-shadow: 0 8px 36px rgba(0, 0, 0, 0.6);
+            background: #000;
+        }
+
+        .preview-modal .close-btn {
+            position: absolute;
+            top: 18px;
+            right: 18px;
+            background: transparent;
+            border: 0;
+            color: var(--text);
+            font-size: 18px;
+            cursor: pointer;
         }
     </style>
 </head>
@@ -543,6 +579,8 @@
             <div class="status-dot pulse" id="status-dot"></div>
             <span id="status-text">Connecting to server...</span>
         </div>
+
+        <p class="tip">Place the card well lit and centered in the frame</p>
 
         <div class="camera-panel">
             <div class="camera-viewport">
@@ -581,7 +619,12 @@
             <div id="result-content"></div>
         </div>
 
-        <p class="tip">Place the card well lit and centered in the frame</p>
+    </div>
+
+    <!-- Image preview modal -->
+    <div id="preview-modal" class="preview-modal" role="dialog" aria-hidden="true">
+        <button class="close-btn" aria-label="Close preview" onclick="closePreview()">✕</button>
+        <img id="preview-img" src="" alt="Preview" />
     </div>
 
     <script>
@@ -796,8 +839,9 @@
                     altsHtml += `
                     <div class="alt-item">
                         <img src="${altImg}" alt="${a.altName}"
-                             style="width:32px;height:45px;object-fit:cover;border-radius:2px;border:0.5px solid var(--border);flex-shrink:0;"
-                             onerror="this.style.display='none'" />
+                            style="width:32px;height:45px;object-fit:cover;border-radius:2px;border:0.5px solid var(--border);flex-shrink:0;cursor:zoom-in;margin-right:10px;"
+                            onclick="openPreview('${altImg}', '${a.altName}')"
+                            onerror="this.style.display='none'" />
                         <div style="flex:1;min-width:0;margin-right:10px;">
                             <div class="alt-id" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${a.altName}</div>
                             <div style="font-size:11px;color:var(--text-dim);font-style:italic;margin-top:1px;">${a.altType ? a.altType + ' &middot; ' : ''}Set: <span style="color:var(--text);font-style:normal;font-weight:300;">${a.set || '&mdash;'}</span> &middot; <span style="font-style:normal;">#${a.id}</span></div>
@@ -814,9 +858,10 @@
 
             resultContent.innerHTML = `
     <div style="display:flex;gap:14px;align-items:flex-start;padding:1.25rem 1.25rem 0;">
-      <img src="${cdnImage}" alt="${cardName}"
-           style="width:90px;flex-shrink:0;border-radius:4px;border:0.5px solid var(--border-bright);object-fit:cover;"
-           onerror="this.style.display='none'" />
+     <img src="${cdnImage}" alt="${cardName}"
+         style="width:90px;flex-shrink:0;border-radius:4px;border:0.5px solid var(--border-bright);object-fit:cover;cursor:zoom-in;"
+         onclick="openPreview('${cdnImage}', '${cardName}')"
+         onerror="this.style.display='none'" />
       <div style="flex:1;min-width:0;">
         <div class="card-id" style="font-size:20px;">${cardName}</div>
         <div class="card-set" style="margin-bottom:0.4rem;">${cardType ? cardType + ' &middot; ' : ''}Set: <span>${data.set}</span> &middot; <span style="font-style:normal;font-size:13px;color:var(--text-dim);">#${data.id}</span></div>
@@ -836,6 +881,34 @@
         }
 
         checkServer();
+
+        // Preview modal handlers
+        function openPreview(src, alt) {
+            const modal = document.getElementById('preview-modal');
+            const img = document.getElementById('preview-img');
+            img.src = src;
+            img.alt = alt || '';
+            modal.classList.add('visible');
+            modal.setAttribute('aria-hidden', 'false');
+            // close on ESC
+            document.addEventListener('keydown', escHandler);
+        }
+
+        function closePreview() {
+            const modal = document.getElementById('preview-modal');
+            const img = document.getElementById('preview-img');
+            modal.classList.remove('visible');
+            modal.setAttribute('aria-hidden', 'true');
+            img.src = '';
+            document.removeEventListener('keydown', escHandler);
+        }
+
+        function escHandler(e) { if (e.key === 'Escape') closePreview(); }
+
+        // Click outside image to close
+        document.getElementById('preview-modal').addEventListener('click', (e) => {
+            if (e.target.id === 'preview-modal') closePreview();
+        });
     </script>
 </body>
 
