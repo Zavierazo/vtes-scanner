@@ -125,7 +125,7 @@
             }
 
             /* Make the confidence column take full width and align its contents */
-            .alt-item > div:last-child {
+            .alt-item>div:last-child {
                 width: 100% !important;
                 display: flex !important;
                 justify-content: space-between !important;
@@ -133,7 +133,9 @@
                 gap: 8px;
             }
 
-            .alt-id { font-size: 14px; }
+            .alt-id {
+                font-size: 14px;
+            }
         }
 
         /* Header */
@@ -914,9 +916,8 @@
         <div style="padding:1rem 1.25rem;font-style:italic;color:var(--text-dim);font-size:15px;">
             Comparing against the dataset...
         </div>`;
-            // show inline spinner in the main button and scroll user to results
+            // show inline spinner in the main button
             showButtonSpinner('Scanning...');
-            resultPanel.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
             // Release the camera immediately after capturing so the browser
             // frees the device while the server processes the image.
@@ -931,15 +932,12 @@
                 const data = await resp.json();
                 await renderResult(data);
                 hideButtonSpinner();
-                // ensure results are visible to the user (in case renderResult adjusted layout)
-                resultPanel.scrollIntoView({ behavior: 'smooth', block: 'center' });
             } catch (e) {
                 hideButtonSpinner();
                 resultContent.innerHTML = `<div class="not-found">Server connection error.</div>`;
                 appState = 'result';
                 mainBtn.textContent = 'Scan Again';
                 mainBtn.disabled = false;
-                resultPanel.scrollIntoView({ behavior: 'smooth', block: 'center' });
             } finally {
                 scanLine.classList.remove('scanning');
             }
@@ -972,6 +970,7 @@
                 appState = 'result';
                 mainBtn.textContent = 'Scan Again';
                 mainBtn.disabled = false;
+                // No automatic scrolling: user can view results manually or tap preview
                 return;
             }
 
@@ -1048,6 +1047,7 @@
             appState = 'result';
             mainBtn.textContent = 'Scan Again';
             mainBtn.disabled = false;
+            // No automatic scrolling after render; user can scroll or tap elements manually.
         }
 
         checkServer();
