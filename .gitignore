@@ -1,2 +1,57 @@
-*.pkl
+# Python artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
 *.pyc
+.Python
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+pip-wheel-metadata/
+
+# Test / coverage
+.pytest_cache/
+.coverage
+coverage.xml
+
+# Mypy / caches
+.mypy_cache/
+
+# Editor directories
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Local env files
+.env
+.env.*
+
+# Logs
+*.log
+
+# Database
+*.sqlite3
+
+# Large project artifacts
+card_index.pkl
+
+# Docker
+docker-compose.override.yml
+
+# Others
+*.swp
+
+# Allow local overrides
+.local-*
