@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VTES Card Scanner</title>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Crimson+Pro:ital,wght@0,300;0,400;1,300&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0a0808;
+            --surface: #110e0e;
+            --surface2: #1a1515;
+            --border: rgba(180, 140, 90, 0.2);
+            --border-bright: rgba(180, 140, 90, 0.55);
+            --gold: #c9a84c;
+            --gold-dim: #7a6030;
+            --red: #8b2020;
+            --red-bright: #c0392b;
+            --text: #e8ddd0;
+            --text-dim: #8a7a6a;
+            --success: #4a9e6a;
+            --warn: #b8860b;
+            --radius: 4px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Crimson Pro', Georgia, serif;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        /* Texture overlay */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image:
+                radial-gradient(ellipse at 50% 0%, rgba(139, 32, 32, 0.12) 0%, transparent 60%),
+                url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .wrapper {
+            position: relative;
+            z-index: 1;
+            width: 100%;
+            max-width: 560px;
+            padding: 2rem 1.25rem 3rem;
+        }
+
+        /* Header */
+        header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .logo-line {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            margin-bottom: 6px;
+        }
+
+        .logo-line::before,
+        .logo-line::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: linear-gradient(to right, transparent, var(--gold-dim));
+        }
+
+        .logo-line::after {
+            background: linear-gradient(to left, transparent, var(--gold-dim));
+        }
+
+        h1 {
+            font-family: 'Cinzel', serif;
+            font-size: 22px;
+            font-weight: 700;
+            letter-spacing: 0.12em;
+            color: var(--gold);
+            text-transform: uppercase;
+        }
+
+        .subtitle {
+            font-size: 13px;
+            color: var(--text-dim);
+            letter-spacing: 0.08em;
+            font-style: italic;
+        }
+
+        /* Status bar */
+        .status-bar {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 14px;
+            background: var(--surface);
+            border: 0.5px solid var(--border);
+            border-radius: var(--radius);
+            margin-bottom: 1.25rem;
+            font-size: 13px;
+            color: var(--text-dim);
+        }
+
+        .status-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: var(--text-dim);
+            flex-shrink: 0;
+        }
+
+        .status-dot.ok {
+            background: var(--success);
+            box-shadow: 0 0 6px var(--success);
+        }
+
+        .status-dot.error {
+            background: var(--red-bright);
+        }
+
+        .status-dot.pulse {
+            background: var(--gold);
+            animation: blink 1.2s ease-in-out infinite;
+        }
+
+        @keyframes blink {
+
+            0%,
+            100% {
+                opacity: 1
+            }
+
+            50% {
+                opacity: 0.3
+            }
+        }
+
+        /* Camera panel */
+        .camera-panel {
+            background: var(--surface);
+            border: 0.5px solid var(--border);
+            border-radius: var(--radius);
+            overflow: hidden;
+            margin-bottom: 1rem;
+        }
+
+        .camera-viewport {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 4/3;
+            background: #050303;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        #video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: none;
+        }
+
+        .idle-art {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            color: var(--text-dim);
+        }
+
+        .idle-art svg {
+            width: 52px;
+            height: 52px;
+            opacity: 0.3;
+        }
+
+        .idle-art p {
+            font-size: 14px;
+            font-style: italic;
+            opacity: 0.6;
+        }
+
+        /* Card crop guide overlay */
+        .frame-overlay {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            display: none;
+        }
+
+        .frame-overlay.visible {
+            display: block;
+        }
+
+        /* Centered card-shaped guide — matches the region sent to the server */
+        .card-guide {
+            position: absolute;
+            height: 88%;
+            aspect-ratio: 5/7;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            border: 1.5px solid rgba(201, 168, 76, 0.9);
+            border-radius: 3px;
+            /* Dim everything outside the guide */
+            box-shadow: 0 0 0 2000px rgba(0, 0, 0, 0.45);
+            pointer-events: none;
+        }
+
+        /* Corner accents on the card guide */
+        .card-guide::before,
+        .card-guide::after {
+            content: '';
+            position: absolute;
+            width: 18px;
+            height: 18px;
+            border-color: var(--gold);
+            border-style: solid;
+            opacity: 0.9;
+        }
+
+        .card-guide::before {
+            top: -2px;
+            left: -2px;
+            border-width: 2px 0 0 2px;
+        }
+
+        .card-guide::after {
+            bottom: -2px;
+            right: -2px;
+            border-width: 0 2px 2px 0;
+        }
+
+        /* Flash effect */
+        .flash {
+            position: absolute;
+            inset: 0;
+            background: white;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.08s;
+        }
+
+        .flash.active {
+            opacity: 0.4;
+        }
+
+        /* Scan line animation */
+        .scan-line {
+            position: absolute;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(to right, transparent, var(--gold), transparent);
+            opacity: 0;
+            top: 0;
+        }
+
+        .scan-line.scanning {
+            opacity: 0.8;
+            animation: scandown 1.2s ease-in-out infinite;
+        }
+
+        @keyframes scandown {
+            0% {
+                top: 10%;
+            }
+
+            50% {
+                top: 90%;
+            }
+
+            100% {
+                top: 10%;
+            }
+        }
+
+        /* Controls */
+        .controls {
+            padding: 12px;
+        }
+
+        button {
+            font-family: 'Cinzel', serif;
+            font-size: 12px;
+            letter-spacing: 0.1em;
+            padding: 10px 16px;
+            border-radius: var(--radius);
+            border: 0.5px solid var(--border-bright);
+            background: transparent;
+            color: var(--gold);
+            cursor: pointer;
+            transition: all 0.15s;
+            text-transform: uppercase;
+        }
+
+        button:hover {
+            background: rgba(201, 168, 76, 0.08);
+            border-color: var(--gold);
+        }
+
+        button:active {
+            transform: scale(0.97);
+        }
+
+        button:disabled {
+            opacity: 0.35;
+            cursor: not-allowed;
+        }
+
+        button.scan-btn {
+            background: rgba(139, 32, 32, 0.3);
+            border-color: var(--red-bright);
+            color: #e8a090;
+        }
+
+        button.scan-btn:hover:not(:disabled) {
+            background: rgba(139, 32, 32, 0.5);
+        }
+
+        /* Canvas hidden */
+        #canvas {
+            display: none;
+        }
+
+        /* Frozen capture shown in place of video */
+        #freeze {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            display: none;
+            background: #050303;
+        }
+
+        /* Result panel */
+        .result-panel {
+            background: var(--surface);
+            border: 0.5px solid var(--border);
+            border-radius: var(--radius);
+            overflow: hidden;
+            margin-bottom: 1rem;
+            display: none;
+        }
+
+        .result-panel.visible {
+            display: block;
+        }
+
+        .result-header {
+            padding: 10px 14px;
+            background: var(--surface2);
+            border-bottom: 0.5px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-family: 'Cinzel', serif;
+            font-size: 11px;
+            letter-spacing: 0.1em;
+            color: var(--text-dim);
+            text-transform: uppercase;
+        }
+
+        .result-body {
+            padding: 1.25rem 1.25rem 1rem;
+        }
+
+        .card-id {
+            font-family: 'Cinzel', serif;
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--gold);
+            letter-spacing: 0.06em;
+            margin-bottom: 4px;
+        }
+
+        .card-set {
+            font-size: 16px;
+            color: var(--text-dim);
+            font-style: italic;
+            margin-bottom: 1rem;
+        }
+
+        .card-set span {
+            color: var(--text);
+            font-style: normal;
+            font-weight: 300;
+        }
+
+        .confidence-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 1rem;
+        }
+
+        .confidence-bar-bg {
+            flex: 1;
+            height: 4px;
+            background: var(--surface2);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .confidence-bar {
+            height: 100%;
+            border-radius: 2px;
+            background: var(--success);
+            transition: width 0.5s ease;
+        }
+
+        .confidence-bar.medium {
+            background: var(--warn);
+        }
+
+        .confidence-bar.low {
+            background: var(--red-bright);
+        }
+
+        .confidence-label {
+            font-size: 12px;
+            font-family: 'Cinzel', serif;
+            letter-spacing: 0.08em;
+            min-width: 40px;
+            text-align: right;
+        }
+
+        .confidence-label.high {
+            color: var(--success);
+        }
+
+        .confidence-label.medium {
+            color: var(--warn);
+        }
+
+        .confidence-label.low {
+            color: var(--red-bright);
+        }
+
+        .elapsed {
+            font-size: 12px;
+            color: var(--text-dim);
+        }
+
+        /* Alternatives */
+        .alts-title {
+            font-family: 'Cinzel', serif;
+            font-size: 10px;
+            letter-spacing: 0.1em;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            margin-bottom: 6px;
+            margin-top: 10px;
+        }
+
+        .alt-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 5px 0;
+            border-top: 0.5px solid var(--border);
+            font-size: 13px;
+            color: var(--text-dim);
+        }
+
+        .alt-id {
+            font-family: 'Cinzel', serif;
+            font-size: 12px;
+            color: var(--text);
+        }
+
+        .alt-set {
+            font-style: italic;
+            font-size: 12px;
+        }
+
+        .alt-score {
+            font-size: 11px;
+        }
+
+        .not-found {
+            padding: 1.25rem;
+            font-style: italic;
+            color: var(--text-dim);
+            font-size: 15px;
+        }
+
+        /* Thumbnail */
+        #thumb-wrap {
+            display: none;
+            padding: 0 1.25rem 1rem;
+        }
+
+        #thumb {
+            width: 60px;
+            height: 84px;
+            object-fit: cover;
+            border: 0.5px solid var(--border-bright);
+            border-radius: 2px;
+            opacity: 0.8;
+        }
+
+        /* Tip */
+        .tip {
+            text-align: center;
+            font-size: 12px;
+            color: var(--text-dim);
+            font-style: italic;
+            margin-top: 1rem;
+            opacity: 0.7;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrapper">
+        <header>
+            <div class="logo-line">
+                <h1>VTES Scanner</h1>
+            </div>
+            <p class="subtitle">Vampire: The Eternal Struggle · Card Identifier</p>
+        </header>
+
+        <div class="status-bar">
+            <div class="status-dot pulse" id="status-dot"></div>
+            <span id="status-text">Connecting to server...</span>
+        </div>
+
+        <div class="camera-panel">
+            <div class="camera-viewport">
+                <video id="video" autoplay playsinline muted></video>
+                <img id="freeze" alt="Captured frame" />
+                <canvas id="canvas"></canvas>
+
+                <div class="idle-art" id="idle-art">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+                        <rect x="2" y="3" width="20" height="18" rx="2" />
+                        <circle cx="12" cy="12" r="4" />
+                        <path d="M2 8h2M20 8h2" />
+                    </svg>
+                    <p>Enable the camera to scan</p>
+                </div>
+
+                <div class="frame-overlay" id="frame-overlay">
+                    <div class="card-guide" id="card-guide"></div>
+                    <div class="flash" id="flash"></div>
+                </div>
+                <div class="scan-line" id="scan-line"></div>
+            </div>
+
+            <div class="controls">
+                <button id="main-btn" class="scan-btn" onclick="handleMainBtn()" style="width:100%;">Scan Card</button>
+            </div>
+        </div>
+
+        <div class="result-panel" id="result-panel">
+            <div class="result-header">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
+                    <circle cx="6" cy="6" r="5" />
+                </svg>
+                Result
+            </div>
+            <div id="result-content"></div>
+        </div>
+
+        <p class="tip">Place the card well lit and centered in the frame</p>
+    </div>
+
+    <script>
+        let stream = null;
+        let serverReady = false;
+        // States: 'idle' | 'camera' | 'scanning'
+        let appState = 'idle';
+
+        const video = document.getElementById('video');
+        const freeze = document.getElementById('freeze');
+        const canvas = document.getElementById('canvas');
+        const idleArt = document.getElementById('idle-art');
+        const frameOverlay = document.getElementById('frame-overlay');
+        const scanLine = document.getElementById('scan-line');
+        const flash = document.getElementById('flash');
+        const mainBtn = document.getElementById('main-btn');
+        const resultPanel = document.getElementById('result-panel');
+        const resultContent = document.getElementById('result-content');
+        const statusDot = document.getElementById('status-dot');
+        const statusText = document.getElementById('status-text');
+
+        async function checkServer() {
+            try {
+                const r = await fetch('/status');
+                const data = await r.json();
+                if (data.ready) {
+                    statusDot.className = 'status-dot ok';
+                    statusText.textContent = `Server ready · ${data.cards_indexed.toLocaleString()} indexed cards`;
+                    serverReady = true;
+                } else {
+                    statusDot.className = 'status-dot error';
+                    statusText.textContent = 'Index not found. Run build_index.py';
+                }
+            } catch (e) {
+                statusDot.className = 'status-dot error';
+                statusText.textContent = 'Cannot connect to server';
+                setTimeout(checkServer, 3000);
+            }
+        }
+
+        // Single-button state machine
+        async function handleMainBtn() {
+            if (appState === 'idle') {
+                await startCamera();
+            } else if (appState === 'camera') {
+                await doScan();
+            }
+            // 'scanning' state: button is disabled, nothing to do
+        }
+
+        async function startCamera() {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 960 } }
+                });
+                video.srcObject = stream;
+                video.style.display = 'block';
+                idleArt.style.display = 'none';
+                frameOverlay.classList.add('visible');
+                appState = 'camera';
+                mainBtn.textContent = 'Scan Card';
+                mainBtn.disabled = false;
+            } catch (e) {
+                alert('Could not access the camera: ' + e.message);
+            }
+        }
+
+        function stopCamera() {
+            if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+            video.style.display = 'none';
+            freeze.style.display = 'none';
+            idleArt.style.display = 'flex';
+            frameOverlay.classList.remove('visible');
+            scanLine.classList.remove('scanning');
+            appState = 'idle';
+            mainBtn.textContent = 'Scan Card';
+            mainBtn.disabled = false;
+        }
+
+        // Returns the centered card-crop region of the video frame (5:7 aspect ratio)
+        function getCardCropRegion(vw, vh) {
+            const cardRatio = 5 / 7;
+            const margin = 0.88;
+            let cropH = vh * margin;
+            let cropW = cropH * cardRatio;
+            if (cropW > vw * margin) {
+                cropW = vw * margin;
+                cropH = cropW / cardRatio;
+            }
+            return {
+                x: Math.round((vw - cropW) / 2),
+                y: Math.round((vh - cropH) / 2),
+                w: Math.round(cropW),
+                h: Math.round(cropH)
+            };
+        }
+
+        async function doScan() {
+            if (!stream) return;
+
+            appState = 'scanning';
+            mainBtn.disabled = true;
+
+            // Flash effect
+            flash.classList.add('active');
+            setTimeout(() => flash.classList.remove('active'), 120);
+
+            // Capture the card-guide region (center crop, 5:7 aspect ratio)
+            const crop = getCardCropRegion(video.videoWidth, video.videoHeight);
+            canvas.width = crop.w;
+            canvas.height = crop.h;
+            canvas.getContext('2d').drawImage(
+                video,
+                crop.x, crop.y, crop.w, crop.h,
+                0, 0, crop.w, crop.h
+            );
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+            const base64 = dataUrl.split(',')[1];
+
+            // Freeze: swap live feed for the still capture
+            video.style.display = 'none';
+            frameOverlay.classList.remove('visible');
+            freeze.src = dataUrl;
+            freeze.style.display = 'block';
+
+            // Start scan animation
+            scanLine.classList.add('scanning');
+
+            // Show loading state in result panel
+            resultPanel.classList.add('visible');
+            resultContent.innerHTML = `
+    <div style="padding:1rem 1.25rem;font-style:italic;color:var(--text-dim);font-size:15px;">
+      Comparing against the dataset...
+    </div>`;
+
+            try {
+                const resp = await fetch('/scan', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ image: base64 })
+                });
+                const data = await resp.json();
+                renderResult(data);
+            } catch (e) {
+                resultContent.innerHTML = `<div class="not-found">Server connection error.</div>`;
+                appState = 'camera';
+                mainBtn.disabled = false;
+            } finally {
+                scanLine.classList.remove('scanning');
+            }
+        }
+
+        function scanAgain() {
+            freeze.style.display = 'none';
+            freeze.src = '';
+            video.style.display = 'block';
+            frameOverlay.classList.add('visible');
+            resultPanel.classList.remove('visible');
+            resultContent.innerHTML = '';
+            appState = 'camera';
+            mainBtn.disabled = false;
+        }
+
+        async function renderResult(data) {
+            const scanAgainBtn = `<button onclick="scanAgain()" style="margin-top:0.75rem;width:100%;">Scan again</button>`;
+
+            if (!data.found) {
+                resultContent.innerHTML = `
+      <div style="padding:1.25rem;">
+        <div class="not-found" style="padding:0;margin-bottom:0.75rem;">&#9888; ${data.message || 'Card not identified. Try better lighting.'}</div>
+        ${scanAgainBtn}
+      </div>`;
+                return;
+            }
+
+            const confClass = data.confidence >= 60 ? 'high' : data.confidence >= 35 ? 'medium' : 'low';
+            const barClass = confClass === 'high' ? '' : confClass;
+            const cdnImage = `https://cdn.vtesdecks.com/img/cards/${data.id}.jpg`;
+
+            // Fetch card details from API
+            let cardName = data.id;
+            let cardType = '';
+            try {
+                const meta = await fetch(`https://api.vtesdecks.com/1.0/cards/${data.id}`).then(r => r.json());
+                if (meta.name) cardName = meta.name;
+                if (meta.type) cardType = meta.type;
+            } catch (_) { /* show id as fallback */ }
+
+            // Resolve alternative names in parallel
+            const altsMeta = await Promise.all((data.alternatives || []).map(async a => {
+                const altConf = a.confidence !== undefined ? a.confidence : Math.min(100, Math.round((a.score || 0) * 2));
+                let altName = a.id;
+                let altType = '';
+                try {
+                    const m = await fetch(`https://api.vtesdecks.com/1.0/cards/${a.id}`).then(r => r.json());
+                    if (m.name) altName = m.name;
+                    if (m.type) altType = m.type;
+                } catch (_) { }
+                return { ...a, altName, altType, altConf };
+            }));
+
+            let altsHtml = '';
+            if (altsMeta.length > 0) {
+                altsHtml = `<p class="alts-title">Other possibilities</p>`;
+                altsMeta.forEach(a => {
+                    const altImg = `https://cdn.vtesdecks.com/img/cards/${a.id}.jpg`;
+                    const altConfClass = a.altConf >= 60 ? '' : a.altConf >= 35 ? 'medium' : 'low';
+                    altsHtml += `
+                    <div class="alt-item">
+                        <img src="${altImg}" alt="${a.altName}"
+                             style="width:32px;height:45px;object-fit:cover;border-radius:2px;border:0.5px solid var(--border);flex-shrink:0;"
+                             onerror="this.style.display='none'" />
+                        <div style="flex:1;min-width:0;margin-right:10px;">
+                            <div class="alt-id" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${a.altName}</div>
+                            <div style="font-size:11px;color:var(--text-dim);font-style:italic;margin-top:1px;">${a.altType ? a.altType + ' &middot; ' : ''}Set: <span style="color:var(--text);font-style:normal;font-weight:300;">${a.set || '&mdash;'}</span> &middot; <span style="font-style:normal;">#${a.id}</span></div>
+                        </div>
+                        <div style="width:140px;display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
+                          <div style="width:100%;height:8px;background:var(--surface2);border-radius:4px;overflow:hidden;">
+                            <div class="confidence-bar ${altConfClass}" style="width:${a.altConf}%;height:100%;"></div>
+                          </div>
+                          <div style="font-size:11px;white-space:nowrap;color:var(--text-dim);">${a.altConf}% &middot; Score: ${a.score}</div>
+                        </div>
+                    </div>`;
+                });
+            }
+
+            resultContent.innerHTML = `
+    <div style="display:flex;gap:14px;align-items:flex-start;padding:1.25rem 1.25rem 0;">
+      <img src="${cdnImage}" alt="${cardName}"
+           style="width:90px;flex-shrink:0;border-radius:4px;border:0.5px solid var(--border-bright);object-fit:cover;"
+           onerror="this.style.display='none'" />
+      <div style="flex:1;min-width:0;">
+        <div class="card-id" style="font-size:20px;">${cardName}</div>
+        <div class="card-set" style="margin-bottom:0.4rem;">${cardType ? cardType + ' &middot; ' : ''}Set: <span>${data.set}</span> &middot; <span style="font-style:normal;font-size:13px;color:var(--text-dim);">#${data.id}</span></div>
+        <div class="confidence-row">
+          <div class="confidence-bar-bg">
+            <div class="confidence-bar ${barClass}" style="width:${data.confidence}%"></div>
+          </div>
+          <span class="confidence-label ${confClass}">${data.confidence}%</span>
+        </div>
+        <div class="elapsed">Time: ${data.elapsed_ms}ms &middot; Score: ${data.score}</div>
+      </div>
+    </div>
+    <div style="padding:0 1.25rem;">${altsHtml}</div>
+    <div style="padding:0.75rem 1.25rem 1.25rem;">${scanAgainBtn}</div>`;
+        }
+
+        checkServer();
+    </script>
+</body>
+
+</html>
