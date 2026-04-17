@@ -42,7 +42,7 @@ def load_index():
     return True
 
 
-def match_card(img_gray: np.ndarray, top_k: int = 8):
+def match_card(img_gray: np.ndarray, top_k: int = 10):
     """
     Two-phase matching:
       1. Fast ratio-test filter over the full index.
