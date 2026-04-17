@@ -21,7 +21,7 @@ import tempfile
 import shutil
 
 def build_index(cards_root: str, output: str = "card_index.pkl"):
-    orb = cv2.ORB_create(nfeatures=1000)
+    orb = cv2.ORB_create(nfeatures=300)
     clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
     index = []  # List of dicts: {id, set, path, keypoints, descriptors}
 

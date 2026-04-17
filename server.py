@@ -36,11 +36,7 @@ def load_index():
     with open(INDEX_FILE, "rb") as f:
         INDEX = pickle.load(f)
 
-    # Use fewer features at query time than what's stored in the index.
-    # This directly reduces Hamming distance computations in Phase 1 (per-card loop)
-    # without requiring an index rebuild: knnMatch(500 query, ~1000 train) is 2× faster
-    # than knnMatch(1000 query, ~1000 train) while the 4-match threshold still holds.
-    ORB = cv2.ORB_create(nfeatures=100)
+    ORB = cv2.ORB_create(nfeatures=300)
     BF_MATCHER = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=False)
     CLAHE = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
 
