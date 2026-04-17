@@ -1,0 +1,20 @@
+# Git metadata
+.git
+.gitignore
+.github
+
+# Generated files (rebuilt inside Docker)
+card_index.pkl
+
+# Development artifacts
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info
+
+# IDE / OS
+.idea
+.vscode
+*.DS_Store
