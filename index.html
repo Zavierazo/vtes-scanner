@@ -685,6 +685,9 @@
                     video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 960 } }
                 });
                 video.srcObject = stream;
+                // Hide any previous frozen capture when re-opening the camera
+                freeze.style.display = 'none';
+                freeze.src = '';
                 video.style.display = 'block';
                 idleArt.style.display = 'none';
                 frameOverlay.classList.add('visible');
@@ -696,17 +699,32 @@
             }
         }
 
-        function stopCamera() {
-            if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+        // Stops the camera stream. If `keepFreeze` is true, the frozen captured
+        // image remains visible so the user still sees the captured frame.
+        function releaseCamera(keepFreeze = false) {
+            if (stream) {
+                stream.getTracks().forEach(t => t.stop());
+                stream = null;
+            }
+            video.srcObject = null;
             video.style.display = 'none';
-            freeze.style.display = 'none';
-            idleArt.style.display = 'flex';
             frameOverlay.classList.remove('visible');
             scanLine.classList.remove('scanning');
-            appState = 'idle';
-            mainBtn.textContent = 'Enable Camera';
-            mainBtn.disabled = false;
+            if (keepFreeze) {
+                // keep the frozen image visible, don't show idle art
+                idleArt.style.display = 'none';
+            } else {
+                freeze.style.display = 'none';
+                freeze.src = '';
+                idleArt.style.display = 'flex';
+                appState = 'idle';
+                mainBtn.textContent = 'Enable Camera';
+                mainBtn.disabled = false;
+            }
         }
+
+        // Backwards-compatible full stop
+        function stopCamera() { releaseCamera(false); }
 
         // Returns the centered card-crop region of the video frame (5:7 aspect ratio)
         function getCardCropRegion(vw, vh) {
@@ -764,6 +782,10 @@
       Comparing against the dataset...
     </div>`;
 
+            // Release the camera immediately after capturing so the browser
+            // frees the device while the server processes the image.
+            releaseCamera(true);
+
             try {
                 const resp = await fetch('/scan', {
                     method: 'POST',
@@ -771,26 +793,33 @@
                     body: JSON.stringify({ image: base64 })
                 });
                 const data = await resp.json();
-                renderResult(data);
+                await renderResult(data);
             } catch (e) {
                 resultContent.innerHTML = `<div class="not-found">Server connection error.</div>`;
-                appState = 'camera';
+                appState = 'result';
+                mainBtn.textContent = 'Scan Again';
                 mainBtn.disabled = false;
             } finally {
                 scanLine.classList.remove('scanning');
             }
         }
 
-        function scanAgain() {
-            freeze.style.display = 'none';
-            freeze.src = '';
-            video.style.display = 'block';
-            frameOverlay.classList.add('visible');
+        async function scanAgain() {
             resultPanel.classList.remove('visible');
             resultContent.innerHTML = '';
-            appState = 'camera';
-            mainBtn.textContent = 'Scan Card';
-            mainBtn.disabled = false;
+            // If we still have an active stream, just switch back to live view.
+            if (stream) {
+                freeze.style.display = 'none';
+                freeze.src = '';
+                video.style.display = 'block';
+                frameOverlay.classList.add('visible');
+                appState = 'camera';
+                mainBtn.textContent = 'Scan Card';
+                mainBtn.disabled = false;
+                return;
+            }
+            // Otherwise, re-open the camera.
+            await startCamera();
         }
 
         async function renderResult(data) {
