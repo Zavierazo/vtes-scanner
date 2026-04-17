@@ -13,6 +13,7 @@ import base64
 import time
 import cv2
 import numpy as np
+from concurrent.futures import ThreadPoolExecutor
 from flask import Flask, request, jsonify, send_from_directory
 
 app = Flask(__name__, static_folder=".")
@@ -22,10 +23,11 @@ INDEX = []
 ORB = None
 BF_MATCHER = None
 CLAHE = None
+PHASE1_POOL = None
 MIN_ALT_CONF = 20  # Minimum confidence (%) for alternatives to be included in results
 
 def load_index():
-    global INDEX, ORB, BF_MATCHER, CLAHE
+    global INDEX, ORB, BF_MATCHER, CLAHE, PHASE1_POOL
     if not os.path.exists(INDEX_FILE):
         print(f"❌ '{INDEX_FILE}' not found.")
         print("   Run first: python build_index.py")
@@ -39,6 +41,9 @@ def load_index():
     ORB = cv2.ORB_create(nfeatures=300)
     BF_MATCHER = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=False)
     CLAHE = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    # Persistent pool for Phase 1. Worker count = logical CPU count so all cores
+    # are used; OpenCV releases the GIL inside knnMatch so threads run in parallel.
+    PHASE1_POOL = ThreadPoolExecutor(max_workers=os.cpu_count())
 
     print(f"✅ Index loaded: {len(INDEX)} cards in {time.time()-t0:.1f}s")
     return True
@@ -60,15 +65,15 @@ def match_card(img_gray: np.ndarray, top_k: int = 10):
     if des_query is None or len(kp_query) < 10:
         return None, []
 
-    # Phase 1: per-card ratio-test filter.
-    # knnMatch is called once per card so the k=2 neighbours are always within-card,
-    # preserving Lowe's original semantics (within-card distinctiveness test).
+    # Phase 1: parallel per-card ratio-test filter.
+    # knnMatch releases the Python GIL so threads run genuinely in parallel.
+    # _score_entry is a module-level function (required for ThreadPoolExecutor).
     LOWE_RATIO = 0.72
-    raw = []
-    for entry in INDEX:
+
+    def _score_entry(entry):
         des_train = entry["descriptors"]
         if des_train is None or len(des_train) < 10:
-            continue
+            return None
         matches = BF_MATCHER.knnMatch(des_query, des_train, k=2)
         good = [
             m for m_pair in matches
@@ -76,8 +81,9 @@ def match_card(img_gray: np.ndarray, top_k: int = 10):
             for m, n in [m_pair]
             if m.distance < LOWE_RATIO * n.distance
         ]
-        if len(good) >= 4:
-            raw.append((len(good), entry, good))
+        return (len(good), entry, good) if len(good) >= 4 else None
+
+    raw = [r for r in PHASE1_POOL.map(_score_entry, INDEX) if r is not None]
 
     if not raw:
         return None, []
