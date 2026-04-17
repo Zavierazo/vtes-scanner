@@ -580,8 +580,6 @@
             <span id="status-text">Connecting to server...</span>
         </div>
 
-        <p class="tip">Place the card well lit and centered in the frame</p>
-
         <div class="camera-panel">
             <div class="camera-viewport">
                 <video id="video" autoplay playsinline muted></video>
@@ -605,9 +603,12 @@
             </div>
 
             <div class="controls">
-                <button id="main-btn" class="scan-btn" onclick="handleMainBtn()" style="width:100%;">Scan Card</button>
+                <button id="main-btn" class="scan-btn" onclick="handleMainBtn()" style="width:100%;">Enable
+                    Camera</button>
             </div>
         </div>
+
+        <p class="tip">Place the card well lit and centered in the frame</p>
 
         <div class="result-panel" id="result-panel">
             <div class="result-header">
@@ -703,7 +704,7 @@
             frameOverlay.classList.remove('visible');
             scanLine.classList.remove('scanning');
             appState = 'idle';
-            mainBtn.textContent = 'Scan Card';
+            mainBtn.textContent = 'Enable Camera';
             mainBtn.disabled = false;
         }
 
