@@ -62,6 +62,53 @@
             padding: 2rem 1.25rem 3rem;
         }
 
+        /* Mobile adjustments: make the app use more horizontal space
+              and increase camera / result sizes on small screens */
+        @media (max-width: 600px) {
+            .wrapper {
+                max-width: 100%;
+                padding: 1rem;
+            }
+
+            .camera-viewport {
+                aspect-ratio: 3 / 4;
+                height: 56vh;
+            }
+
+            #video,
+            #freeze {
+                height: 100%;
+                object-fit: cover;
+            }
+
+            .controls {
+                padding: 10px;
+            }
+
+            button {
+                padding: 12px 18px;
+                font-size: 13px;
+            }
+
+            /* Stack result content vertically and enlarge the preview image */
+            #result-content>div {
+                flex-direction: column !important;
+                align-items: center !important;
+                gap: 12px;
+            }
+
+            /* Only enlarge the main preview image, not alternative thumbnails */
+            .result-panel .main-preview {
+                width: 140px !important;
+                height: auto !important;
+                object-fit: cover;
+            }
+
+            .confidence-row {
+                width: 100%;
+            }
+        }
+
         /* Header */
         header {
             text-align: center;
@@ -481,6 +528,27 @@
             color: var(--text-dim);
         }
 
+        .alt-thumb {
+            width: 32px;
+            height: 45px;
+            object-fit: cover;
+            border-radius: 2px;
+            border: 0.5px solid var(--border);
+            flex-shrink: 0;
+            cursor: zoom-in;
+            margin-right: 10px;
+        }
+
+        .alt-id {
+            font-weight: 500;
+            color: var(--text);
+            font-size: 13px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            /* allow wrapping on narrow screens */
+            white-space: normal;
+        }
+
         .alt-id {
             font-family: 'Cinzel', serif;
             font-size: 12px;
@@ -867,22 +935,21 @@
                     const altImg = a.set ? `https://cdn.vtesdecks.com/img/cards/sets/${a.set}/${a.id}.jpg` : `https://cdn.vtesdecks.com/img/cards/${a.id}.jpg`;
                     const altConfClass = a.altConf >= 60 ? '' : a.altConf >= 35 ? 'medium' : 'low';
                     altsHtml += `
-                    <div class="alt-item">
-                        <img src="${altImg}" alt="${a.altName}"
-                            style="width:32px;height:45px;object-fit:cover;border-radius:2px;border:0.5px solid var(--border);flex-shrink:0;cursor:zoom-in;margin-right:10px;"
-                            onclick="openPreview('${altImg}', '${a.altName}')"
-                            onerror="this.style.display='none'" />
-                        <div style="flex:1;min-width:0;margin-right:10px;">
-                            <div class="alt-id" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${a.altName}</div>
-                            <div style="font-size:11px;color:var(--text-dim);font-style:italic;margin-top:1px;">${a.altType ? a.altType + ' &middot; ' : ''}Set: <span style="color:var(--text);font-style:normal;font-weight:300;">${a.set || '&mdash;'}</span> &middot; <span style="font-style:normal;">#${a.id}</span></div>
-                        </div>
-                        <div style="width:140px;display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
-                          <div style="width:100%;height:8px;background:var(--surface2);border-radius:4px;overflow:hidden;">
-                            <div class="confidence-bar ${altConfClass}" style="width:${a.altConf}%;height:100%;"></div>
-                          </div>
-                          <div style="font-size:11px;white-space:nowrap;color:var(--text-dim);">${a.altConf}% &middot; Score: ${a.score}</div>
-                        </div>
-                    </div>`;
+                                        <div class="alt-item">
+                                                <img class="alt-thumb" src="${altImg}" alt="${a.altName}"
+                                                        onclick="openPreview('${altImg}', '${a.altName}')"
+                                                        onerror="this.style.display='none'" />
+                                                <div style="flex:1;min-width:0;margin-right:10px;">
+                                                        <div class="alt-id">${a.altName}</div>
+                                                        <div style="font-size:11px;color:var(--text-dim);font-style:italic;margin-top:1px;">${a.altType ? a.altType + ' &middot; ' : ''}Set: <span style="color:var(--text);font-style:normal;font-weight:300;">${a.set || '&mdash;'}</span> &middot; <span style="font-style:normal;">#${a.id}</span></div>
+                                                </div>
+                                                <div style="width:140px;display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
+                                                    <div style="width:100%;height:8px;background:var(--surface2);border-radius:4px;overflow:hidden;">
+                                                        <div class="confidence-bar ${altConfClass}" style="width:${a.altConf}%;height:100%;"></div>
+                                                    </div>
+                                                    <div style="font-size:11px;color:var(--text-dim);">${a.altConf}% &middot; Score: ${a.score}</div>
+                                                </div>
+                                        </div>`;
                 });
             }
 
