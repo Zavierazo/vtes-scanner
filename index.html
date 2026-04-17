@@ -110,6 +110,32 @@
             }
         }
 
+        /* Fix very narrow screens where alt items overlap */
+        @media (max-width: 400px) {
+            .alt-item {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 8px;
+                padding: 8px 0;
+            }
+
+            .alt-thumb {
+                width: 36px;
+                height: 50px;
+            }
+
+            /* Make the confidence column take full width and align its contents */
+            .alt-item > div:last-child {
+                width: 100% !important;
+                display: flex !important;
+                justify-content: space-between !important;
+                align-items: center !important;
+                gap: 8px;
+            }
+
+            .alt-id { font-size: 14px; }
+        }
+
         /* Header */
         header {
             text-align: center;
