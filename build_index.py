@@ -4,7 +4,9 @@ Run this script ONCE to index all images.
 It generates 'card_index.pkl', which the server uses for matching.
 
 Usage:
-    python build_index.py --cards "D:/Trabajo/Git/vtesdecks-statics/public/img/cards"
+    python build_index.py --cards "/path/to/img/cards"
+    python build_index.py --cards "/path/to/cards.zip"
+    python build_index.py --cards "https://example.com/cards.zip"
 """
 
 import os
@@ -13,6 +15,10 @@ import argparse
 import time
 import cv2
 import numpy as np
+import urllib.request
+import zipfile
+import tempfile
+import shutil
 
 def build_index(cards_root: str, output: str = "card_index.pkl"):
     orb = cv2.ORB_create(nfeatures=1000)
@@ -121,10 +127,11 @@ def build_index(cards_root: str, output: str = "card_index.pkl"):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="VTES - Build card index")
+    default_cards = os.path.join(os.path.dirname(__file__), "img", "cards")
     parser.add_argument(
         "--cards",
-        default=r"D:\Trabajo\Git\vtesdecks-statics\public\img\cards",
-        help="Path to the root folder containing card images"
+        default=default_cards,
+        help="Path/zip/URL to the root folder containing card images (dir, .zip, or http(s) .zip)"
     )
     parser.add_argument(
         "--output",
@@ -133,11 +140,53 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    if not os.path.isdir(args.cards):
-        print(f"❌ Folder not found: {args.cards}")
-        print("   Use --cards to specify the correct path")
-        exit(1)
+    def is_url(path: str) -> bool:
+        return path.startswith("http://") or path.startswith("https://")
 
-    t0 = time.time()
-    build_index(args.cards, args.output)
-    print(f"\n⏱  Total time: {time.time() - t0:.1f}s")
+    def download_and_extract_zip(url: str) -> str:
+        tmp_dir = tempfile.mkdtemp(prefix="vtes_cards_")
+        tmp_zip = os.path.join(tmp_dir, "cards.zip")
+        print(f"⬇️  Downloading ZIP from: {url}")
+        try:
+            urllib.request.urlretrieve(url, tmp_zip)
+        except Exception:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+            raise
+        print(f"📦 Extracting to: {tmp_dir}")
+        with zipfile.ZipFile(tmp_zip, "r") as z:
+            z.extractall(tmp_dir)
+        return tmp_dir
+
+    def extract_local_zip(zip_path: str) -> str:
+        tmp_dir = tempfile.mkdtemp(prefix="vtes_cards_")
+        with zipfile.ZipFile(zip_path, "r") as z:
+            z.extractall(tmp_dir)
+        return tmp_dir
+
+    cards_arg = args.cards
+    cards_root = None
+
+    try:
+        if is_url(cards_arg):
+            cards_root = download_and_extract_zip(cards_arg)
+        elif os.path.isfile(cards_arg) and cards_arg.lower().endswith(".zip"):
+            cards_root = extract_local_zip(cards_arg)
+        else:
+            cards_root = cards_arg
+
+        if not os.path.isdir(cards_root):
+            print(f"❌ Folder not found: {cards_root}")
+            print("   Provide a directory, a .zip file, or a http(s) .zip URL with --cards")
+            exit(1)
+
+        t0 = time.time()
+        build_index(cards_root, args.output)
+        print(f"\n⏱  Total time: {time.time() - t0:.1f}s")
+    finally:
+        try:
+            if cards_root and cards_root.startswith(tempfile.gettempdir()) and (
+                is_url(cards_arg) or (os.path.isfile(cards_arg) and cards_arg.lower().endswith(".zip"))
+            ):
+                shutil.rmtree(cards_root, ignore_errors=True)
+        except Exception:
+            pass
