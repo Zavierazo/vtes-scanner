@@ -41,7 +41,7 @@ def load_index():
     return True
 
 
-def match_card(img_gray: np.ndarray, top_k: int = 5):
+def match_card(img_gray: np.ndarray, top_k: int = 8):
     """
     Two-phase matching:
       1. Fast ratio-test filter over the full index.
@@ -82,11 +82,12 @@ def match_card(img_gray: np.ndarray, top_k: int = 5):
 
     raw.sort(key=lambda x: x[0], reverse=True)
 
-    # Phase 2: homography verification on top-15 candidates (needs keypoints in index)
+    # Phase 2: homography verification on top-30 candidates (needs keypoints in index).
+    # Using 30 so that set-variants of the same card (near-identical art) are all captured.
     has_keypoints = "keypoints" in raw[0][1]
     if has_keypoints:
         verified = []
-        for _, entry, good_matches in raw[:15]:
+        for _, entry, good_matches in raw[:30]:
             kp_train = entry["keypoints"]  # (N, 2) float32
 
             src_pts = np.float32(
@@ -132,10 +133,15 @@ def match_card(img_gray: np.ndarray, top_k: int = 5):
         "path": best_entry["path"],
     }
 
+    # Include all alternatives including same card in different sets.
+    # Deduplicate by (id, set) pair — keep the highest-scoring entry per pair.
+    seen = {(best_entry["id"], best_entry["set"])}
     alternatives = []
     for score, entry in scores[1:]:
-        if entry["id"] == best_entry["id"]:
+        key = (entry["id"], entry["set"])
+        if key in seen:
             continue
+        seen.add(key)
         alt_conf = score_to_conf(score)
         alternatives.append({
             "id": entry["id"],

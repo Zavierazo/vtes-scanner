@@ -776,7 +776,7 @@
 
             // Resolve alternative names in parallel
             const altsMeta = await Promise.all((data.alternatives || []).map(async a => {
-                const altConf = a.confidence !== undefined ? a.confidence : Math.min(100, Math.round((a.score || 0) * 2));
+                const altConf = a.confidence ?? 0;
                 let altName = a.id;
                 let altType = '';
                 try {
