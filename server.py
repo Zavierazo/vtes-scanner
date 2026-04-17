@@ -21,10 +21,11 @@ INDEX_FILE = "card_index.pkl"
 INDEX = []
 ORB = None
 BF_MATCHER = None
+CLAHE = None
 MIN_ALT_CONF = 20  # Minimum confidence (%) for alternatives to be included in results
 
 def load_index():
-    global INDEX, ORB, BF_MATCHER
+    global INDEX, ORB, BF_MATCHER, CLAHE
     if not os.path.exists(INDEX_FILE):
         print(f"❌ '{INDEX_FILE}' not found.")
         print("   Run first: python build_index.py")
@@ -35,8 +36,13 @@ def load_index():
     with open(INDEX_FILE, "rb") as f:
         INDEX = pickle.load(f)
 
-    ORB = cv2.ORB_create(nfeatures=1000)
+    # Use fewer features at query time than what's stored in the index.
+    # This directly reduces Hamming distance computations in Phase 1 (per-card loop)
+    # without requiring an index rebuild: knnMatch(500 query, ~1000 train) is 2× faster
+    # than knnMatch(1000 query, ~1000 train) while the 4-match threshold still holds.
+    ORB = cv2.ORB_create(nfeatures=500)
     BF_MATCHER = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=False)
+    CLAHE = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
 
     print(f"✅ Index loaded: {len(INDEX)} cards in {time.time()-t0:.1f}s")
     return True
@@ -52,29 +58,28 @@ def match_card(img_gray: np.ndarray, top_k: int = 10):
     img_resized = cv2.resize(img_gray, (300, 420))
 
     # Normalize contrast (same preprocessing as build_index)
-    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-    img_resized = clahe.apply(img_resized)
+    img_resized = CLAHE.apply(img_resized)
 
     kp_query, des_query = ORB.detectAndCompute(img_resized, None)
     if des_query is None or len(kp_query) < 10:
         return None, []
 
-    # Phase 1: collect raw ratio-test scores for every entry
+    # Phase 1: per-card ratio-test filter.
+    # knnMatch is called once per card so the k=2 neighbours are always within-card,
+    # preserving Lowe's original semantics (within-card distinctiveness test).
     LOWE_RATIO = 0.72
     raw = []
     for entry in INDEX:
         des_train = entry["descriptors"]
         if des_train is None or len(des_train) < 10:
             continue
-
         matches = BF_MATCHER.knnMatch(des_query, des_train, k=2)
-        good = []
-        for m_pair in matches:
-            if len(m_pair) == 2:
-                m, n = m_pair
-                if m.distance < LOWE_RATIO * n.distance:
-                    good.append(m)
-
+        good = [
+            m for m_pair in matches
+            if len(m_pair) == 2
+            for m, n in [m_pair]
+            if m.distance < LOWE_RATIO * n.distance
+        ]
         if len(good) >= 4:
             raw.append((len(good), entry, good))
 
@@ -83,12 +88,11 @@ def match_card(img_gray: np.ndarray, top_k: int = 10):
 
     raw.sort(key=lambda x: x[0], reverse=True)
 
-    # Phase 2: homography verification on top-30 candidates (needs keypoints in index).
-    # Using 30 so that set-variants of the same card (near-identical art) are all captured.
+    # Phase 2: homography verification on top-20 candidates (needs keypoints in index).
     has_keypoints = "keypoints" in raw[0][1]
     if has_keypoints:
         verified = []
-        for _, entry, good_matches in raw[:40]:
+        for _, entry, good_matches in raw[:20]:
             kp_train = entry["keypoints"]  # (N, 2) float32
 
             src_pts = np.float32(
