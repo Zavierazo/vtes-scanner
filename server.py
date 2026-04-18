@@ -230,19 +230,10 @@ def scan():
         })
 
     # Confidence level as text
-    conf = result["confidence"]
-    if conf >= 60:
-        conf_label = "high"
-    elif conf >= 35:
-        conf_label = "medium"
-    else:
-        conf_label = "low"
-
     response = {
         "found": True,
         "id": result["id"],
-        "confidence": conf,
-        "confidence_label": conf_label,
+        "confidence": result["confidence"],
         "score": result["score"],
         "elapsed_ms": elapsed,
     }

@@ -13,73 +13,79 @@ Web application that uses the camera to identify Vampire: The Eternal Struggle (
 - Python 3.8+
 - Git (optional)
 
-## Setup (Linux)
-- Git (optional)
+## Setup
+
 ```bash
+# Linux / macOS
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 ```
+
+```powershell
+# Windows
+python -m venv .venv
 .\.venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
 ## Build the image index
+
 You can use the `vtesdecks-statics` repository as the card image source: https://github.com/Zavierazo/vtesdecks-statics
 
 ```bash
-python3 build_index.py --cards "/path/to/img/cards"
-```
-```powershell
-python build_index.py --cards "path\to\img\cards"
+python build_index.py --cards "path/to/img/cards"
 ```
 
 The builder creates `card_index.pkl` (binary). This file is large and intentionally excluded from VCS.
 
+## Run the server
+
 ```bash
-# Activate virtualenv if not already
-source .venv/bin/activate
-```powershell
-# Activate virtualenv if not already
-```
 python server.py
-# Server listens by default on http://localhost:5000
+# → http://localhost:5000
 ```
 
 ## API
-```bash
-docker build -t vtes-scanner .
-docker run -p 5000:5000 -v /path/to/card_index.pkl:/app/card_index.pkl vtes-scanner
-```
 
+**POST `/scan`**
+
+Request body (JSON):
 ```json
-{ "image": "<base64-encoded JPEG/PNG>" }
+{
+  "image": "<base64-encoded JPEG/PNG>",
+  "id_only": false,
+  "no_alternatives": false
+}
 ```
 
-Success response example:
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `image` | string | — | Base64-encoded JPEG or PNG |
+| `id_only` | bool | `false` | Ignore set/edition — all editions of a card are merged; `set` is omitted from the response |
+| `no_alternatives` | bool | `false` | Return only the top match (faster — Phase 2 uses top-5 instead of top-40); `alternatives` is omitted |
 
+Default success response:
 ```json
 {
   "found": true,
   "id": "100038",
   "set": "30th",
   "confidence": 72,
-  "confidence_label": "high",
   "score": 45,
   "elapsed_ms": 310,
-  "alternatives": [{ "id": "100040", "set": "30th", "score": 30 }]
+  "alternatives": [{ "id": "100040", "set": "30th", "score": 30, "confidence": 60 }]
 }
 ```
 
-Not-found response example:
-
+Not-found response:
 ```json
 { "found": false, "message": "...", "elapsed_ms": 120 }
 ```
 
 ## Docker
 
-A `Dockerfile` is present for container usage. Build and run as usual:
+A `Dockerfile` is present for container usage:
 
 ```powershell
 docker build -t vtes-scanner .
