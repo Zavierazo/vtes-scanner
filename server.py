@@ -11,12 +11,23 @@ import os
 import pickle
 import base64
 import time
+import logging
 import cv2
 import numpy as np
 from concurrent.futures import ThreadPoolExecutor
 from flask import Flask, request, jsonify, send_from_directory
 
 app = Flask(__name__, static_folder=".")
+
+# Use gunicorn's logger when running under gunicorn, fall back to a basic
+# stderr logger for direct `python server.py` runs.
+gunicorn_logger = logging.getLogger("gunicorn.error")
+if gunicorn_logger.handlers:
+    app.logger.handlers = gunicorn_logger.handlers
+    app.logger.setLevel(gunicorn_logger.level)
+else:
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+    app.logger.setLevel(logging.INFO)
 
 INDEX_FILE = "card_index.pkl"
 INDEX = []
@@ -233,6 +244,10 @@ def scan():
     elapsed = round((time.time() - t0) * 1000)
 
     if result is None:
+        app.logger.info(
+            "SCAN not_found | id_only=%s no_alternatives=%s fast=%s | elapsed=%dms",
+            id_only, no_alternatives, fast, elapsed,
+        )
         return jsonify({
             "found": False,
             "message": "Not enough features were detected. Improve the lighting or move the card closer.",
@@ -251,6 +266,13 @@ def scan():
         response["set"] = result["set"] or "unknown"
     if not no_alternatives:
         response["alternatives"] = alternatives
+
+    top_set = f" set={result['set']}" if not id_only else ""
+    app.logger.info(
+        "SCAN found | id=%s%s confidence=%d%% score=%d | id_only=%s no_alternatives=%s fast=%s | elapsed=%dms",
+        result["id"], top_set, result["confidence"], result["score"],
+        id_only, no_alternatives, fast, elapsed,
+    )
     return jsonify(response)
 
 
