@@ -735,6 +735,13 @@
                         style="font-family:'Cinzel',serif;font-size:11px;letter-spacing:0.08em;color:var(--text-dim);text-transform:uppercase;cursor:pointer;">Best
                         result only</label>
                 </div>
+                <div style="margin-top:6px;display:flex;align-items:center;gap:8px;">
+                    <input type="checkbox" id="fast-check"
+                        style="accent-color:var(--gold);width:14px;height:14px;cursor:pointer;" />
+                    <label for="fast-check"
+                        style="font-family:'Cinzel',serif;font-size:11px;letter-spacing:0.08em;color:var(--text-dim);text-transform:uppercase;cursor:pointer;">Fast
+                        mode</label>
+                </div>
             </div>
         </div>
 
@@ -939,12 +946,13 @@
 
             const idOnly = document.getElementById('id-only-check').checked;
             const noAlternatives = document.getElementById('no-alts-check').checked;
+            const fast = document.getElementById('fast-check').checked;
 
             try {
                 const resp = await fetch('/scan', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ image: base64, id_only: idOnly, no_alternatives: noAlternatives })
+                    body: JSON.stringify({ image: base64, id_only: idOnly, no_alternatives: noAlternatives, fast: fast })
                 });
                 const data = await resp.json();
                 await renderResult(data);

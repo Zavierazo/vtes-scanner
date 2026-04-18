@@ -55,7 +55,8 @@ Request body (JSON):
 {
   "image": "<base64-encoded JPEG/PNG>",
   "id_only": false,
-  "no_alternatives": false
+  "no_alternatives": false,
+  "fast": false
 }
 ```
 
@@ -64,6 +65,7 @@ Request body (JSON):
 | `image` | string | — | Base64-encoded JPEG or PNG |
 | `id_only` | bool | `false` | Ignore set/edition — all editions of a card are merged; `set` is omitted from the response |
 | `no_alternatives` | bool | `false` | Return only the top match (faster — Phase 2 uses top-5 instead of top-40); `alternatives` is omitted |
+| `fast` | bool | `false` | Use `nfeatures=100` instead of 300 for quicker feature extraction; reduces accuracy slightly |
 
 Default success response:
 ```json
