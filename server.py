@@ -49,7 +49,7 @@ def load_index():
     return True
 
 
-def match_card(img_gray: np.ndarray, top_k: int = 10):
+def match_card(img_gray: np.ndarray, top_k: int = 10, id_only: bool = False):
     """
     Two-phase matching:
       1. Fast ratio-test filter over the full index.
@@ -124,6 +124,21 @@ def match_card(img_gray: np.ndarray, top_k: int = 10):
     if not scores or scores[0][0] < 4:
         return None, []
 
+    # When id_only, merge scores by card id (keep max score per id)
+    if id_only:
+        id_best_score: dict = {}
+        id_best_entry: dict = {}
+        for score, entry in scores:
+            cid = entry["id"]
+            if cid not in id_best_score or score > id_best_score[cid]:
+                id_best_score[cid] = score
+                id_best_entry[cid] = entry
+        scores = sorted(
+            [(id_best_score[cid], id_best_entry[cid]) for cid in id_best_score],
+            key=lambda x: x[0],
+            reverse=True,
+        )
+
     best_score, best_entry = scores[0]
 
     # Absolute confidence: score × scale, capped at 100%.
@@ -134,32 +149,33 @@ def match_card(img_gray: np.ndarray, top_k: int = 10):
 
     result = {
         "id": best_entry["id"],
-        "set": best_entry["set"],
+        "set": None if id_only else best_entry["set"],
         "score": best_score,
         "confidence": score_to_conf(best_score),
         "path": best_entry["path"],
     }
 
-    # Include all alternatives including same card in different sets.
-    # Deduplicate by (id, set) pair — keep the highest-scoring entry per pair.
-    
-    seen = {(best_entry["id"], best_entry["set"])}
+    # Deduplicate alternatives by (id, set) or id-only depending on mode.
+    seen_ids = {best_entry["id"]}
+    seen_pairs = {(best_entry["id"], best_entry["set"])}
     alternatives = []
     for score, entry in scores[1:]:
-        key = (entry["id"], entry["set"])
-        if key in seen:
-            continue
-        seen.add(key)
+        if id_only:
+            if entry["id"] in seen_ids:
+                continue
+            seen_ids.add(entry["id"])
+            alt = {"id": entry["id"], "score": score}
+        else:
+            key = (entry["id"], entry["set"])
+            if key in seen_pairs:
+                continue
+            seen_pairs.add(key)
+            alt = {"id": entry["id"], "set": entry["set"], "score": score}
         alt_conf = score_to_conf(score)
-        # Only include alternatives with at least 10% confidence; cap at top_k-1.
         if alt_conf < MIN_ALT_CONF:
             continue
-        alternatives.append({
-            "id": entry["id"],
-            "set": entry["set"],
-            "score": score,
-            "confidence": alt_conf,
-        })
+        alt["confidence"] = alt_conf
+        alternatives.append(alt)
         if len(alternatives) >= top_k - 1:
             break
 
@@ -190,8 +206,10 @@ def scan():
     except Exception as e:
         return jsonify({"error": f"Error decoding image: {str(e)}"}), 400
 
+    id_only = bool(data.get("id_only", False))
+
     t0 = time.time()
-    result, alternatives = match_card(img)
+    result, alternatives = match_card(img, id_only=id_only)
     elapsed = round((time.time() - t0) * 1000)
 
     if result is None:
@@ -210,16 +228,18 @@ def scan():
     else:
         conf_label = "low"
 
-    return jsonify({
+    response = {
         "found": True,
         "id": result["id"],
-        "set": result["set"] or "unknown",
         "confidence": conf,
         "confidence_label": conf_label,
         "score": result["score"],
         "elapsed_ms": elapsed,
         "alternatives": alternatives,
-    })
+    }
+    if not id_only:
+        response["set"] = result["set"] or "unknown"
+    return jsonify(response)
 
 
 @app.route("/status")
