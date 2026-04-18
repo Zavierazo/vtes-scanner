@@ -790,7 +790,7 @@
                 const data = await r.json();
                 if (data.ready) {
                     statusDot.className = 'status-dot ok';
-                    statusText.textContent = `Server ready · ${data.cards_indexed.toLocaleString()} indexed cards`;
+                    statusText.textContent = `Server ready · ${data.cardsIndexed.toLocaleString()} indexed cards`;
                     serverReady = true;
                 } else {
                     statusDot.className = 'status-dot error';
@@ -952,7 +952,7 @@
                 const resp = await fetch('/scan', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ image: base64, id_only: idOnly, no_alternatives: noAlternatives, fast: fast })
+                    body: JSON.stringify({ image: base64, idOnly: idOnly, noAlternatives: noAlternatives, fast: fast })
                 });
                 const data = await resp.json();
                 await renderResult(data);
@@ -1067,7 +1067,7 @@
           </div>
           <span class="confidence-label ${confClass}">${data.confidence}%</span>
         </div>
-        <div class="elapsed">Time: ${data.elapsed_ms}ms &middot; Score: ${data.score}</div>
+                <div class="elapsed">Time: ${data.elapsedMs}ms &middot; Score: ${data.score}</div>
       </div>
     </div>
     <div style="padding:0 1.25rem 1.25rem;">${altsHtml}</div>`;

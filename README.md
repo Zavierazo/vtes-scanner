@@ -54,8 +54,8 @@ Request body (JSON):
 ```json
 {
   "image": "<base64-encoded JPEG/PNG>",
-  "id_only": false,
-  "no_alternatives": false,
+  "idOnly": false,
+  "noAlternatives": false,
   "fast": false
 }
 ```
@@ -63,8 +63,8 @@ Request body (JSON):
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `image` | string | — | Base64-encoded JPEG or PNG |
-| `id_only` | bool | `false` | Ignore set/edition — all editions of a card are merged; `set` is omitted from the response |
-| `no_alternatives` | bool | `false` | Return only the top match (faster — Phase 2 uses top-5 instead of top-40); `alternatives` is omitted |
+| `idOnly` | bool | `false` | Ignore set/edition — all editions of a card are merged; `set` is omitted from the response |
+| `noAlternatives` | bool | `false` | Return only the top match (faster — Phase 2 uses top-5 instead of top-40); `alternatives` is omitted |
 | `fast` | bool | `false` | Use `nfeatures=100` instead of 300 for quicker feature extraction; reduces accuracy slightly |
 
 Default success response:
@@ -75,14 +75,14 @@ Default success response:
   "set": "30th",
   "confidence": 72,
   "score": 45,
-  "elapsed_ms": 310,
+  "elapsedMs": 310,
   "alternatives": [{ "id": "100040", "set": "30th", "score": 30, "confidence": 60 }]
 }
 ```
 
 Not-found response:
 ```json
-{ "found": false, "message": "...", "elapsed_ms": 120 }
+{ "found": false, "message": "...", "elapsedMs": 120 }
 ```
 
 ## Docker

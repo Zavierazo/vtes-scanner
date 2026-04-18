@@ -235,8 +235,8 @@ def scan():
     except Exception as e:
         return jsonify({"error": f"Error decoding image: {str(e)}"}), 400
 
-    id_only = bool(data.get("id_only", False))
-    no_alternatives = bool(data.get("no_alternatives", False))
+    id_only = bool(data.get("idOnly", False))
+    no_alternatives = bool(data.get("noAlternatives", False))
     fast = bool(data.get("fast", False))
 
     t0 = time.time()
@@ -251,7 +251,7 @@ def scan():
         return jsonify({
             "found": False,
             "message": "Not enough features were detected. Improve the lighting or move the card closer.",
-            "elapsed_ms": elapsed,
+            "elapsedMs": elapsed,
         })
 
     # Confidence level as text
@@ -260,7 +260,7 @@ def scan():
         "id": result["id"],
         "confidence": result["confidence"],
         "score": result["score"],
-        "elapsed_ms": elapsed,
+        "elapsedMs": elapsed,
     }
     if not id_only:
         response["set"] = result["set"] or "unknown"
@@ -280,8 +280,8 @@ def scan():
 def status():
     return jsonify({
         "ready": len(INDEX) > 0,
-        "cards_indexed": len(INDEX),
-        "index_file": INDEX_FILE,
+        "cardsIndexed": len(INDEX),
+        "indexFile": INDEX_FILE,
     })
 
 

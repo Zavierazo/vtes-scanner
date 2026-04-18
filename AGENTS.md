@@ -37,8 +37,8 @@ img/cards/
 5. **Phase 1 — BFMatcher** with Hamming distance + **Lowe ratio test** (threshold 0.72) over the full index. Gather all entries with ≥4 good matches.
 6. **Phase 2 — Homography/RANSAC** on the top-15 candidates: compute `findHomography` with RANSAC (reproj. error 5 px) and count inliers. Inliers are geometrically consistent matches; they are the actual score.
 7. Return best match (ID + set) ranked by inlier count. Confidence = `min(100, inliers × 5)` (20 inliers → 100%).
-   - When `id_only=true`: all editions of a card are merged (max score kept) before ranking — `set` is omitted from results.
-   - When `no_alternatives=true`: Phase 2 runs on **top-5** candidates only (vs. top-40), reducing RANSAC calls significantly. Only the best match is returned.
+  - When `idOnly=true`: all editions of a card are merged (max score kept) before ranking — `set` is omitted from results.
+  - When `noAlternatives=true`: Phase 2 runs on **top-5** candidates only (vs. top-40), reducing RANSAC calls significantly. Only the best match is returned.
 
 Confidence thresholds: `≥60` → high, `≥35` → medium, `<35` → low.
 
@@ -66,16 +66,16 @@ Request body (JSON):
 ```json
 {
   "image": "<base64-encoded JPEG/PNG>",
-  "id_only": false,
-  "no_alternatives": false
+  "idOnly": false,
+  "noAlternatives": false
 }
 ```
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `image` | string | — | Base64-encoded JPEG or PNG |
-| `id_only` | bool | `false` | When `true`, set/edition is ignored — all editions of the same card are merged before ranking. `set` is omitted from the response. |
-| `no_alternatives` | bool | `false` | When `true`, only the best match is returned. Phase 2 runs on top-5 candidates instead of top-40, giving a significant speed-up. `alternatives` is omitted from the response. |
+| `idOnly` | bool | `false` | When `true`, set/edition is ignored — all editions of the same card are merged before ranking. `set` is omitted from the response. |
+| `noAlternatives` | bool | `false` | When `true`, only the best match is returned. Phase 2 runs on top-5 candidates instead of top-40, giving a significant speed-up. `alternatives` is omitted from the response. |
 
 Success response (default):
 ```json
@@ -85,24 +85,24 @@ Success response (default):
   "set": "30th",
   "confidence": 72,
   "score": 45,
-  "elapsed_ms": 310,
+  "elapsedMs": 310,
   "alternatives": [{ "id": "100040", "set": "30th", "score": 30, "confidence": 60 }]
 }
 ```
 
-Success response with `id_only=true`:
+Success response with `idOnly=true`:
 ```json
 {
   "found": true,
   "id": "100038",
   "confidence": 72,
   "score": 45,
-  "elapsed_ms": 310,
+  "elapsedMs": 310,
   "alternatives": [{ "id": "100040", "score": 30, "confidence": 60 }]
 }
 ```
 
-Success response with `no_alternatives=true`:
+Success response with `noAlternatives=true`:
 ```json
 {
   "found": true,
@@ -110,13 +110,13 @@ Success response with `no_alternatives=true`:
   "set": "30th",
   "confidence": 72,
   "score": 45,
-  "elapsed_ms": 310
+  "elapsedMs": 310
 }
 ```
 
 Not-found response:
 ```json
-{ "found": false, "message": "...", "elapsed_ms": 120 }
+{ "found": false, "message": "...", "elapsedMs": 120 }
 ```
 
 ## Known Limitations & Improvement Directions
