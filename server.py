@@ -49,12 +49,14 @@ def load_index():
     return True
 
 
-def match_card(img_gray: np.ndarray, top_k: int = 10, id_only: bool = False):
+def match_card(img_gray: np.ndarray, top_k: int = 10, id_only: bool = False, no_alternatives: bool = False):
     """
     Two-phase matching:
       1. Fast ratio-test filter over the full index.
       2. Homography/RANSAC inlier check on the top candidates (requires keypoints in index).
     Returns the best match and up to top_k-1 alternatives.
+    When no_alternatives=True only the best candidate is needed, so Phase 2 runs
+    on a much smaller window (top-5 instead of top-40) for a significant speed-up.
     """
     img_resized = cv2.resize(img_gray, (300, 420))
 
@@ -90,11 +92,14 @@ def match_card(img_gray: np.ndarray, top_k: int = 10, id_only: bool = False):
 
     raw.sort(key=lambda x: x[0], reverse=True)
 
-    # Phase 2: homography verification on top-20 candidates (needs keypoints in index).
+    # Phase 2: homography verification on top candidates (needs keypoints in index).
+    # When no_alternatives is True we only need the winner, so limit to top-5 to
+    # avoid running the expensive RANSAC step on low-probability candidates.
+    phase2_window = 5 if no_alternatives else 40
     has_keypoints = "keypoints" in raw[0][1]
     if has_keypoints:
         verified = []
-        for _, entry, good_matches in raw[:40]:
+        for _, entry, good_matches in raw[:phase2_window]:
             kp_train = entry["keypoints"]  # (N, 2) float32
 
             src_pts = np.float32(
@@ -155,6 +160,10 @@ def match_card(img_gray: np.ndarray, top_k: int = 10, id_only: bool = False):
         "path": best_entry["path"],
     }
 
+    # Skip building alternatives when not needed.
+    if no_alternatives:
+        return result, []
+
     # Deduplicate alternatives by (id, set) or id-only depending on mode.
     seen_ids = {best_entry["id"]}
     seen_pairs = {(best_entry["id"], best_entry["set"])}
@@ -207,9 +216,10 @@ def scan():
         return jsonify({"error": f"Error decoding image: {str(e)}"}), 400
 
     id_only = bool(data.get("id_only", False))
+    no_alternatives = bool(data.get("no_alternatives", False))
 
     t0 = time.time()
-    result, alternatives = match_card(img, id_only=id_only)
+    result, alternatives = match_card(img, id_only=id_only, no_alternatives=no_alternatives)
     elapsed = round((time.time() - t0) * 1000)
 
     if result is None:
@@ -235,10 +245,11 @@ def scan():
         "confidence_label": conf_label,
         "score": result["score"],
         "elapsed_ms": elapsed,
-        "alternatives": alternatives,
     }
     if not id_only:
         response["set"] = result["set"] or "unknown"
+    if not no_alternatives:
+        response["alternatives"] = alternatives
     return jsonify(response)
 
 
