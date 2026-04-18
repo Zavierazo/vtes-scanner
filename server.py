@@ -194,6 +194,12 @@ def match_card(img_gray: np.ndarray, top_k: int = 10, id_only: bool = False, no_
     return result, alternatives
 
 
+# Initialise at import time — works for both `python server.py` and gunicorn.
+# With gunicorn --preload this runs once in the master before workers fork,
+# sharing the index via copy-on-write.
+load_index()
+
+
 @app.route("/")
 def index():
     return send_from_directory(".", "index.html")
@@ -258,10 +264,5 @@ def status():
 
 
 if __name__ == "__main__":
-    ok = load_index()
-    if not ok:
-        print("\n⚠️  The server will start, but matching will not work.")
-        print("   Run 'python build_index.py' and restart the server.\n")
-
     print("\n🌐 Server available at: http://localhost:5000")
     app.run(host="0.0.0.0", port=5000, debug=False)
