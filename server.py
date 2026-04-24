@@ -32,14 +32,13 @@ else:
 INDEX_FILE = "card_index.pkl"
 INDEX = []
 ORB = None
-ORB_FAST = None
 BF_MATCHER = None
 CLAHE = None
 PHASE1_POOL = None
 MIN_ALT_CONF = 20  # Minimum confidence (%) for alternatives to be included in results
 
 def load_index():
-    global INDEX, ORB, ORB_FAST, BF_MATCHER, CLAHE, PHASE1_POOL
+    global INDEX, ORB, BF_MATCHER, CLAHE, PHASE1_POOL
     if not os.path.exists(INDEX_FILE):
         print(f"❌ '{INDEX_FILE}' not found.")
         print("   Run first: python build_index.py")
@@ -51,7 +50,6 @@ def load_index():
         INDEX = pickle.load(f)
 
     ORB = cv2.ORB_create(nfeatures=300)
-    ORB_FAST = cv2.ORB_create(nfeatures=100)
     BF_MATCHER = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=False)
     CLAHE = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
     # Persistent pool for Phase 1. Worker count = logical CPU count so all cores
@@ -62,7 +60,7 @@ def load_index():
     return True
 
 
-def match_card(img_gray: np.ndarray, top_k: int = 10, id_only: bool = False, no_alternatives: bool = False, fast: bool = False):
+def match_card(img_gray: np.ndarray, top_k: int = 10, id_only: bool = False, no_alternatives: bool = False):
     """
     Two-phase matching:
       1. Fast ratio-test filter over the full index.
@@ -70,14 +68,13 @@ def match_card(img_gray: np.ndarray, top_k: int = 10, id_only: bool = False, no_
     Returns the best match and up to top_k-1 alternatives.
     When no_alternatives=True only the best candidate is needed, so Phase 2 runs
     on a much smaller window (top-5 instead of top-40) for a significant speed-up.
-    When fast=True uses nfeatures=100 (vs 300) for quicker feature extraction.
     """
     img_resized = cv2.resize(img_gray, (300, 420))
 
     # Normalize contrast (same preprocessing as build_index)
     img_resized = CLAHE.apply(img_resized)
 
-    kp_query, des_query = (ORB_FAST if fast else ORB).detectAndCompute(img_resized, None)
+    kp_query, des_query = ORB.detectAndCompute(img_resized, None)
     if des_query is None or len(kp_query) < 10:
         return None, []
 
@@ -237,16 +234,15 @@ def scan():
 
     id_only = bool(data.get("idOnly", False))
     no_alternatives = bool(data.get("noAlternatives", False))
-    fast = bool(data.get("fast", False))
 
     t0 = time.time()
-    result, alternatives = match_card(img, id_only=id_only, no_alternatives=no_alternatives, fast=fast)
+    result, alternatives = match_card(img, id_only=id_only, no_alternatives=no_alternatives)
     elapsed = round((time.time() - t0) * 1000)
 
     if result is None:
         app.logger.info(
-            "SCAN not_found | id_only=%s no_alternatives=%s fast=%s | elapsed=%dms",
-            id_only, no_alternatives, fast, elapsed,
+            "SCAN not_found | id_only=%s no_alternatives=%s | elapsed=%dms",
+            id_only, no_alternatives, elapsed,
         )
         return jsonify({
             "found": False,
@@ -269,9 +265,9 @@ def scan():
 
     top_set = f" set={result['set']}" if not id_only else ""
     app.logger.info(
-        "SCAN found | id=%s%s confidence=%d%% score=%d | id_only=%s no_alternatives=%s fast=%s | elapsed=%dms",
+        "SCAN found | id=%s%s confidence=%d%% score=%d | id_only=%s no_alternatives=%s | elapsed=%dms",
         result["id"], top_set, result["confidence"], result["score"],
-        id_only, no_alternatives, fast, elapsed,
+        id_only, no_alternatives, elapsed,
     )
     return jsonify(response)
 
