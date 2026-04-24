@@ -167,7 +167,7 @@ def match_card(img_gray: np.ndarray, top_k: int = 10, id_only: bool = False, no_
         return min(100, int(round(s * conf_scale)))
 
     result = {
-        "id": best_entry["id"],
+        "id": int(best_entry["id"]),
         "set": None if id_only else best_entry["set"],
         "score": best_score,
         "confidence": score_to_conf(best_score),
@@ -187,13 +187,13 @@ def match_card(img_gray: np.ndarray, top_k: int = 10, id_only: bool = False, no_
             if entry["id"] in seen_ids:
                 continue
             seen_ids.add(entry["id"])
-            alt = {"id": entry["id"], "score": score}
+            alt = {"id": int(entry["id"]), "score": score}
         else:
             key = (entry["id"], entry["set"])
             if key in seen_pairs:
                 continue
             seen_pairs.add(key)
-            alt = {"id": entry["id"], "set": entry["set"], "score": score}
+            alt = {"id": int(entry["id"]), "set": entry["set"], "score": score}
         alt_conf = score_to_conf(score)
         if alt_conf < MIN_ALT_CONF:
             continue
