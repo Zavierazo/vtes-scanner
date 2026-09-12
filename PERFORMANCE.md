@@ -1,6 +1,6 @@
 # Scanner performance experiments
 
-Exact search remains the default. No image-index rebuild or API/client change is
+LSH search is always enabled, with exhaustive search as a fallback. No image-index rebuild or API/client change is
 needed. The matching pool uses all detected logical CPUs, OpenCV retains its
 default parallelism, and Gunicorn defaults to its original two worker processes.
 There are no application-level CPU/thread caps: control CPU allocation through
@@ -11,7 +11,6 @@ Docker, as in the production deployment (3–4 CPUs).
 | Environment variable | Default | Meaning |
 |---|---|---|
 | `WEB_CONCURRENCY` | `2` | Synchronous Gunicorn worker processes |
-| `SEARCH_MODE` | `exact` | `exact` or experimental `lsh` |
 | `LSH_CANDIDATES` | `100` | Images shortlisted by LSH before expanding their card IDs to all editions |
 | `TIMING_LOGS` | `0` | Set to `1` for JSON stage timings in server logs |
 | `INDEX_FILE` | `card_index.pkl` | Optional existing index path |
@@ -24,8 +23,8 @@ No `cv2.setNumThreads()` override is applied. `WEB_CONCURRENCY` configures HTTP
 worker processes, not a CPU cap. Revert the environment settings or image to roll
 back; the index is unchanged.
 
-Search mode is a server-only setting read at startup. Restart the server after
-changing it. There is no web selector or request-level mode override; `/scan`
+There is no search-mode environment setting, web selector, or request-level
+mode override; `/scan`
 continues to accept the same documented fields as before.
 
 `SCAN_TIMING` logs include preprocessing (resize, CLAHE, ORB), optional retrieval,
@@ -37,7 +36,7 @@ transfer, and frontend metadata requests. Process CPU includes all matching
 threads. Use synchronous Gunicorn workers for interpretable per-request CPU
 accounting; concurrent development-server requests can overlap process counters.
 
-## Experimental LSH behavior
+## LSH behavior
 
 LSH builds a binary Hamming index once per worker (6 tables, 20-bit keys, one
 multi-probe level). Each query descriptor retrieves up to eight neighbors and
@@ -53,8 +52,8 @@ that is confidently wrong does **not** trigger fallback. Alternatives and scores
 can also differ if retrieval excludes a baseline candidate.
 
 LSH consumes extra RAM and startup CPU. An operating-system OOM kill cannot be
-caught by Python's fallback handler. Keep it opt-in until real camera captures
-show acceptable accuracy and the VPS has adequate measured memory headroom.
+caught by Python's fallback handler. Real camera accuracy still needs validation, and the VPS needs adequate measured
+memory headroom.
 Synthetic transformations are useful for comparisons but do not model glare,
 camera autofocus, background clutter, or all edition ambiguities.
 
@@ -80,7 +79,8 @@ creates reference, perspective, brightness, and blur variants, plus blank and
 random-noise negatives. The full search index is retained, including all editions.
 Each of the 122 inputs runs with all four API flag combinations in fresh processes
 for baseline, exact, LSH-50, LSH-100, and LSH-200. OpenCV's RNG is reset before each
-comparison. One initial warmup is excluded from timings.
+comparison. The exact control disables LSH initialization only inside the benchmark;
+production has no mode switch. One initial warmup is excluded from timings.
 
 Results are written to ignored `.local-benchmark/`: the corpus manifest includes
 image hashes and expected IDs/editions; per-mode JSON includes raw results, stage
@@ -125,31 +125,34 @@ docker run --rm --cpus 4 \
   --baseline .local-baseline.py --cards /cards --reuse-search \
   --output .local-benchmark-docker
 
-# HTTP workload: repeat for cpus=3 and cpus=4, modes exact and lsh.
+# HTTP workload: repeat for cpus=3 and cpus=4 (LSH with exhaustive fallback).
 docker run -d --name vtes-perf --cpus 3 -p 127.0.0.1:5055:5000 \
   -v "$PWD:/app:ro" -w /app \
-  -e SEARCH_MODE=exact -e WEB_CONCURRENCY=2 -e TIMING_LOGS=1 \
+  -e WEB_CONCURRENCY=2 -e TIMING_LOGS=1 \
   vtes-scanner:benchmark-base gunicorn --config gunicorn.conf.py server:app
 curl --fail http://localhost:5055/status
 
 python benchmark.py --url http://localhost:5055 --container vtes-perf \
   --cards /path/to/img/cards --samples 30 --concurrency 1 \
-  --output .local-http-3cpu-exact
+  --output .local-http-3cpu-lsh
 python benchmark.py --url http://localhost:5055 --container vtes-perf \
-  --manifest .local-http-3cpu-exact/manifest.json --concurrency 2 \
-  --output .local-http-3cpu-exact
+  --manifest .local-http-3cpu-lsh/manifest.json --concurrency 2 \
+  --output .local-http-3cpu-lsh
 docker logs vtes-perf
 docker stop vtes-perf
 docker rm vtes-perf
 ```
 
-Wait for `/status` to report ready before measuring. For LSH, add
-`-e SEARCH_MODE=lsh -e LSH_CANDIDATES=100` instead of `SEARCH_MODE=exact`. Use separate
-output directories per CPU/mode/worker setting. HTTP timings include queueing and
+Wait for `/status` to report ready before measuring. LSH uses 100 preliminary
+candidates by default; adjust with `-e LSH_CANDIDATES=100` if needed. Use separate
+output directories per CPU/candidate/worker setting. HTTP timings include queueing and
 network time. With `--container`, cgroup v2 CPU deltas account for all workers;
 peak memory is the container lifetime high-water mark, including startup/warmup
 and filesystem cache. Start a fresh container for independent memory comparisons.
 Without this option HTTP CPU/memory are unavailable, not zero.
+
+HTTP runs issue two simultaneous warmup requests before measurement to exercise
+both default Gunicorn workers; direct matcher runs use one warmup scan.
 
 Run concurrent client requests even with one worker: that measures actual queueing
 on a constrained VPS. Do not run other benchmark configurations simultaneously.

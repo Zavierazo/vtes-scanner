@@ -41,9 +41,6 @@ def positive_env(name, default):
 
 INDEX_FILE = os.environ.get("INDEX_FILE", "card_index.pkl")
 MATCH_WORKERS = os.cpu_count() or 1
-SEARCH_MODE = os.environ.get("SEARCH_MODE", "exact")
-if (SEARCH_MODE not in ("exact", "lsh")):
-    raise ValueError("SEARCH_MODE must be exact or lsh")
 LSH_CANDIDATES = positive_env("LSH_CANDIDATES", 100)
 TIMING_LOGS = os.environ.get("TIMING_LOGS", "0") == "1"
 INDEX = []
@@ -71,7 +68,7 @@ def timed(metrics, stage):
 
 
 class CandidateRetriever:
-    """Experimental binary-descriptor lookup; exact scoring remains per image."""
+    """Binary-descriptor lookup; exact scoring remains per image."""
 
     def __init__(self, entries):
         valid = [(i, e["descriptors"]) for i, e in enumerate(entries)
@@ -118,6 +115,7 @@ def load_index():
     with open(INDEX_FILE, "rb") as f:
         INDEX = pickle.load(f)
 
+    # Docker controls CPU allocation; retain OpenCV's default parallelism.
     ORB = cv2.ORB_create(nfeatures=300)
     BF_MATCHER = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=False)
     CLAHE = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
@@ -125,15 +123,14 @@ def load_index():
         PHASE1_POOL.shutdown()
     PHASE1_POOL = ThreadPoolExecutor(max_workers=MATCH_WORKERS)
     RETRIEVER = None
-    if (SEARCH_MODE == "lsh"):
-        try:
-            RETRIEVER = CandidateRetriever(INDEX)
-        except (cv2.error, MemoryError, ValueError):
-            app.logger.exception("LSH initialization failed; using exhaustive search")
+    try:
+        RETRIEVER = CandidateRetriever(INDEX)
+    except (cv2.error, MemoryError, ValueError):
+        app.logger.exception("LSH initialization failed; using exhaustive search")
 
     print(f"✅ Index loaded: {len(INDEX)} cards in {time.time()-t0:.1f}s")
-    app.logger.info("Matcher ready | requested=%s active=%s match_threads=%d opencv_threads=%d",
-                    SEARCH_MODE, "lsh" if (RETRIEVER is not None) else "exact",
+    app.logger.info("Matcher ready | active=%s match_threads=%d opencv_threads=%d",
+                    "lsh" if (RETRIEVER is not None) else "exact",
                     MATCH_WORKERS, cv2.getNumThreads())
     return True
 
@@ -160,7 +157,7 @@ def match_card(img_gray: np.ndarray, top_k: int = 10, id_only: bool = False,
                 entries = INDEX
         if (metrics is not None):
             metrics["candidates"] = len(entries)
-            metrics["fallback"] = SEARCH_MODE == "lsh" and entries is INDEX
+            metrics["fallback"] = entries is INDEX
         result = _match_candidates(kp_query, des_query, entries, top_k, id_only,
                                    no_alternatives, metrics)
         if (result[0] is None and entries is not INDEX and len(entries) < len(INDEX)):
@@ -325,7 +322,7 @@ def log_request_timer(response):
             "wallMs": (time.perf_counter() - wall) * 1000,
             "cpuMs": (time.process_time() - cpu) * 1000,
         }
-        app.logger.info("SCAN_TIMING mode=%s status=%s metrics=%s", SEARCH_MODE,
+        app.logger.info("SCAN_TIMING mode=lsh status=%s metrics=%s",
                         response.status_code, json.dumps(g.scan_metrics))
     return response
 

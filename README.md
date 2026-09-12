@@ -87,8 +87,8 @@ Not-found response:
 
 The default is two synchronous Gunicorn workers. Matching uses all detected CPUs
 and OpenCV's default parallelism; CPU limits belong in Docker. See [PERFORMANCE.md](PERFORMANCE.md) for configuration, optional
-stage timing logs, the experimental LSH candidate search, and reproducible
-accuracy/CPU benchmarks. Exact matching remains the default; no index rebuild is
+stage timing logs, the LSH candidate search, and reproducible
+accuracy/CPU benchmarks. LSH candidate search is always enabled, with exhaustive fallback; no index rebuild is
 needed for these runtime changes.
 
 A `Dockerfile` is present for container usage:

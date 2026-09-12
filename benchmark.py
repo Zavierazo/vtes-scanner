@@ -80,7 +80,9 @@ def make_corpus(args):
         if (args.cards):
             root = Path(args.cards)
             folder = root / "sets" / entry["set"] if (entry["set"]) else root
-            paths = [folder / f"{entry['id']}{ext}" for ext in (".jpg", ".jpeg", ".png", ".webp")]
+            filename = entry["path"].replace("\\", "/").rsplit("/", 1)[-1]
+            paths = [folder / filename] + [folder / f"{entry['id']}{ext}"
+                                          for ext in (".jpg", ".jpeg", ".png", ".webp")]
             path = next((p for p in paths if p.exists()), paths[0])
         else:
             path = Path(entry["path"])
@@ -145,7 +147,8 @@ def summarize(rows):
         "editionQueries": len(editions),
         "falsePositives": sum(r["response"]["found"] for r in negatives),
         "negativeQueries": len(negatives),
-        "fallbacks": sum(bool(r.get("metrics", {}).get("fallback")) for r in rows),
+        "fallbacks": (sum(bool(r.get("metrics", {}).get("fallback")) for r in rows)
+                      if (any("metrics" in r for r in rows)) else None),
     }
 
 
@@ -176,7 +179,6 @@ def worker(args):
     mode = args.worker
     os.environ["INDEX_FILE"] = str(Path(args.index).resolve())
     os.environ["TIMING_LOGS"] = "0"
-    os.environ["SEARCH_MODE"] = "lsh" if (mode.startswith("lsh")) else "exact"
     if (mode.startswith("lsh")):
         os.environ["LSH_CANDIDATES"] = mode[3:]
     source = args.baseline if (mode == "baseline") else "server.py"
@@ -192,6 +194,12 @@ def worker(args):
         # Only redirect the baseline's index filename; retain its algorithm and settings.
         source_text = Path(source).read_text(encoding="utf-8").replace(
             'INDEX_FILE = "card_index.pkl"', f'INDEX_FILE = {str(Path(args.index).resolve())!r}')
+        exec(compile(source_text, source, "exec"), module.__dict__)
+    elif (mode == "exact"):
+        # Benchmark-only exhaustive control; production always initializes LSH.
+        source_text = Path(source).read_text(encoding="utf-8").replace(
+            "RETRIEVER = CandidateRetriever(INDEX)", "RETRIEVER = None").replace(
+                'metrics["fallback"] = entries is INDEX', 'metrics["fallback"] = False')
         exec(compile(source_text, source, "exec"), module.__dict__)
     else:
         spec.loader.exec_module(module)
@@ -264,7 +272,9 @@ def http_benchmark(args, cases):
                 "expectedId": case["id"], "expectedSet": case["set"],
                 "wallMs": elapsed, "response": result}
 
-    send(payloads[0])  # Warm up before container CPU accounting.
+    # Warm both default Gunicorn workers before container CPU accounting.
+    with ThreadPoolExecutor(max_workers=2) as warmup:
+        list(warmup.map(send, [payloads[0], payloads[0]]))
     before = container_stats(args.container) if (args.container) else None
     start = time.perf_counter()
     with ThreadPoolExecutor(max_workers=args.concurrency) as pool:

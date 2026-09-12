@@ -42,12 +42,12 @@ img/cards/
 
 Confidence thresholds: `≥60` → high, `≥35` → medium, `<35` → low.
 
-Runtime defaults: exact search, a matching pool sized to all detected CPUs,
+Runtime defaults: LSH search, a matching pool sized to all detected CPUs,
 OpenCV's default parallelism, and two synchronous Gunicorn workers without
 preloading. Do not introduce internal CPU/thread caps; the production Docker
-container controls its CPU allocation. `SEARCH_MODE=lsh` enables an
-experimental binary-descriptor shortlist, expands card IDs to all editions, and
-uses the same exact scoring. Failed/empty retrieval or no verified result falls
+container controls its CPU allocation. LSH always builds a binary-descriptor
+shortlist, expands card IDs to all editions, and uses the same exact scoring.
+There is no search-mode switch in configuration, the frontend, or requests. Failed/empty retrieval or no verified result falls
 back to exhaustive search; a confidently wrong shortlist does not. See
 `PERFORMANCE.md` for environment variables and `benchmark.py` for the standalone
 accuracy/performance comparison. Do not introduce a unit-test framework.
