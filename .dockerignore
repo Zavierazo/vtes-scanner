@@ -12,6 +12,7 @@ __pycache__
 *.pyo
 *.pyd
 .Python
+.local-*
 *.egg-info
 
 # IDE / OS

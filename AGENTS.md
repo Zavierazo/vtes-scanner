@@ -33,14 +33,24 @@ img/cards/
 1. Frontend crops the camera frame to the **centered 5:7 (card-shaped) region** before sending — eliminates desk/background noise.
 2. Server resizes the crop to 300×420 px.
 3. Apply **CLAHE** (clipLimit=2.0) to normalize contrast — same preprocessing as the index.
-4. Extract up to 1000 **ORB** keypoints + descriptors.
+4. Extract up to 300 **ORB** keypoints + descriptors.
 5. **Phase 1 — BFMatcher** with Hamming distance + **Lowe ratio test** (threshold 0.72) over the full index. Gather all entries with ≥4 good matches.
-6. **Phase 2 — Homography/RANSAC** on the top-15 candidates: compute `findHomography` with RANSAC (reproj. error 5 px) and count inliers. Inliers are geometrically consistent matches; they are the actual score.
+6. **Phase 2 — Homography/RANSAC** on the top-40 candidates: compute `findHomography` with RANSAC (reproj. error 5 px) and count inliers. Inliers are geometrically consistent matches; they are the actual score.
 7. Return best match (ID + set) ranked by inlier count. Confidence = `min(100, inliers × 5)` (20 inliers → 100%).
   - When `idOnly=true`: all editions of a card are merged (max score kept) before ranking — `set` is omitted from results.
   - When `noAlternatives=true`: Phase 2 runs on **top-5** candidates only (vs. top-40), reducing RANSAC calls significantly. Only the best match is returned.
 
 Confidence thresholds: `≥60` → high, `≥35` → medium, `<35` → low.
+
+Runtime defaults: exact search, a matching pool sized to all detected CPUs,
+OpenCV's default parallelism, and two synchronous Gunicorn workers without
+preloading. Do not introduce internal CPU/thread caps; the production Docker
+container controls its CPU allocation. `SEARCH_MODE=lsh` enables an
+experimental binary-descriptor shortlist, expands card IDs to all editions, and
+uses the same exact scoring. Failed/empty retrieval or no verified result falls
+back to exhaustive search; a confidently wrong shortlist does not. See
+`PERFORMANCE.md` for environment variables and `benchmark.py` for the standalone
+accuracy/performance comparison. Do not introduce a unit-test framework.
 
 > **Index requirement:** the index must be built with the current `build_index.py` (stores CLAHE-preprocessed descriptors **and** keypoint coordinates). A legacy index built without keypoints falls back to raw match count without homography.
 
@@ -123,5 +133,5 @@ Not-found response:
 
 - **Single reference image per edition** — heavily tilted cards or strong reflections can still produce errors. The card-crop guide helps; ask the user to keep the card flat and well-lit.
 - **Homography needs ≥4 inliers** — very small or heavily occluded cards may not pass. The fallback "not found" is preferable to a wrong answer.
-- **Index rebuild required** after `build_index.py` changes — the new index stores keypoints (~8 KB/card extra) in addition to descriptors. Memory usage is roughly `~1 MB per 1 000 cards`.
+- **Index rebuild required** after preprocessing/descriptor changes in `build_index.py`. With 300 features, descriptors plus keypoints use about 12 KB per image before Python/OpenCV overhead. Runtime search/thread configuration does not require rebuilding. LSH adds a separate in-memory index per worker; measure its memory before deployment.
 - **Language folders** — `es/`, `fr/`, `pt/` are intentionally excluded from matching to avoid duplicate noise and because coverage is incomplete.
