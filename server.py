@@ -69,7 +69,7 @@ class CandidateRetriever:
                  if (e["descriptors"] is not None and len(e["descriptors"]) >= 10)]
         if (not valid):
             raise ValueError("No descriptors available for LSH")
-        self.descriptors = np.ascontiguousarray(np.concatenate([d for _, d in valid]))
+        descriptors = np.ascontiguousarray(np.concatenate([d for _, d in valid]))
         self.owners = np.repeat(np.array([i for i, _ in valid], dtype=np.int32),
                                 [len(d) for _, d in valid])
         self.entries = entries
@@ -77,7 +77,8 @@ class CandidateRetriever:
         for i, entry in enumerate(entries):
             self.by_id.setdefault(entry["id"], []).append(i)
         # A binary LSH index, not a float/KD-tree approximation of Hamming distance.
-        self.index = cv2.flann_Index(self.descriptors, {
+        # OpenCV clones this buffer; keep it local so it is released after construction.
+        self.index = cv2.flann_Index(descriptors, {
             "algorithm": 6, "table_number": 6, "key_size": 20,
             "multi_probe_level": 1,
         })

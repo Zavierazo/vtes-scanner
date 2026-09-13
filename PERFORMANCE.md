@@ -84,7 +84,11 @@ verified shortlisted result trigger exhaustive search. A shortlisted result
 that is confidently wrong does **not** trigger fallback. Alternatives and scores
 can also differ if retrieval excludes a baseline candidate.
 
-LSH consumes extra RAM and startup CPU. An operating-system OOM kill cannot be
+LSH consumes extra RAM and startup CPU. The concatenated NumPy descriptor buffer
+is released after FLANN constructs its own copy. This saves one descriptor buffer
+per worker during steady operation (about 94 MiB for the 10,243-entry local index),
+but does not reduce the construction peak or require an index rebuild.
+An operating-system OOM kill cannot be
 caught by Python's fallback handler. Real camera accuracy still needs validation, and the VPS needs adequate measured
 memory headroom.
 Synthetic transformations are useful for comparisons but do not model glare,
