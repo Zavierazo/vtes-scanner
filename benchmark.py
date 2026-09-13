@@ -245,7 +245,7 @@ def worker(args):
 
 
 def container_stats(name):
-    # cgroup v2 metrics include all Gunicorn worker processes and queued requests.
+    # cgroup v2 metrics include all uWSGI worker processes and queued requests.
     output = subprocess.check_output(["docker", "exec", name, "cat", "/sys/fs/cgroup/cpu.stat",
                                       "/sys/fs/cgroup/memory.peak"], text=True).splitlines()
     usage = next(int(line.split()[1]) for line in output if line.startswith("usage_usec "))
@@ -272,7 +272,7 @@ def http_benchmark(args, cases):
                 "expectedId": case["id"], "expectedSet": case["set"],
                 "wallMs": elapsed, "response": result}
 
-    # Warm both default Gunicorn workers before container CPU accounting.
+    # Two concurrent warmups support fixed two-worker comparisons.
     with ThreadPoolExecutor(max_workers=2) as warmup:
         list(warmup.map(send, [payloads[0], payloads[0]]))
     before = container_stats(args.container) if (args.container) else None

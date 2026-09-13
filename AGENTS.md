@@ -43,8 +43,15 @@ img/cards/
 Confidence thresholds: `≥60` → high, `≥35` → medium, `<35` → low.
 
 Runtime defaults: LSH search, a matching pool sized to all detected CPUs,
-OpenCV's default parallelism, and two synchronous Gunicorn workers without
-preloading. Do not introduce internal CPU/thread caps; the production Docker
+OpenCV's default parallelism, and one initial synchronous uWSGI worker.
+Docker uses `serve.py` only to validate the worker range and exec uWSGI, whose built-in
+`cheaper` busyness algorithm scales between `WEB_CONCURRENCY` (default 1)
+and `MAX_WEB_CONCURRENCY` (default 3, maximum 3). `uwsgi.ini` must retain `lazy-apps`
+and `enable-threads`: initialize OpenCV/index/pool resources after fork and allow
+the matching pool to run. Equal worker limits disable adaptive spawning.
+`UWSGI_CHEAPER_RSS_LIMIT_SOFT` optionally limits spawning by aggregate worker RSS;
+it does not reserve container headroom. Do not reintroduce a custom scaling controller.
+Do not introduce internal CPU/thread caps; the production Docker
 container controls its CPU allocation. LSH always builds a binary-descriptor
 shortlist, expands card IDs to all editions, and uses the same exact scoring.
 There is no search-mode switch in configuration, the frontend, or requests. Failed/empty retrieval or no verified result falls

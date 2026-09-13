@@ -22,15 +22,9 @@ from flask import Flask, request, jsonify, send_from_directory, g
 
 app = Flask(__name__, static_folder=".")
 
-# Use gunicorn's logger when running under gunicorn, fall back to a basic
-# stderr logger for direct `python server.py` runs.
-gunicorn_logger = logging.getLogger("gunicorn.error")
-if (gunicorn_logger.handlers):
-    app.logger.handlers = gunicorn_logger.handlers
-    app.logger.setLevel(gunicorn_logger.level)
-else:
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
-    app.logger.setLevel(logging.INFO)
+# uWSGI and the development server both collect application logs from stderr.
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+app.logger.setLevel(logging.INFO)
 
 def positive_env(name, default):
     value = int(os.environ.get(name, default))
@@ -138,7 +132,7 @@ def load_index():
 def match_card(img_gray: np.ndarray, top_k: int = 10, id_only: bool = False,
                no_alternatives: bool = False, metrics=None):
     # Flask's development server can accept concurrent requests. Serialize access
-    # to mutable OpenCV resources; Gunicorn uses synchronous worker processes.
+    # to mutable OpenCV resources; uWSGI uses synchronous worker processes.
     with MATCH_LOCK, timed(metrics, "matching"):
         with timed(metrics, "preprocessing"):
             img_resized = CLAHE.apply(cv2.resize(img_gray, (300, 420)))
@@ -301,9 +295,9 @@ def _match_candidates(kp_query, des_query, entries, top_k, id_only, no_alternati
     return result, alternatives
 
 
-# Initialise at import time — works for both `python server.py` and gunicorn.
-# Gunicorn configuration disables preloading: OpenCV resources and thread pools
-# must be initialized inside each worker, never inherited from the master.
+# Initialise at import time — works for both `python server.py` and uWSGI.
+# uWSGI's lazy-apps loads OpenCV resources and thread pools inside each worker,
+# never in the master before fork.
 load_index()
 
 

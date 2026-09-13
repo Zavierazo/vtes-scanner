@@ -2,7 +2,8 @@
 
 LSH search is always enabled, with exhaustive search as a fallback. No image-index rebuild or API/client change is
 needed. The matching pool uses all detected logical CPUs, OpenCV retains its
-default parallelism, and Gunicorn defaults to its original two worker processes.
+default parallelism, and uWSGI starts one worker and automatically scales up to
+three using its built-in `cheaper` busyness algorithm.
 There are no application-level CPU/thread caps: control CPU allocation through
 Docker, as in the production deployment (3–4 CPUs).
 
@@ -10,18 +11,50 @@ Docker, as in the production deployment (3–4 CPUs).
 
 | Environment variable | Default | Meaning |
 |---|---|---|
-| `WEB_CONCURRENCY` | `2` | Synchronous Gunicorn worker processes |
+| `WEB_CONCURRENCY` | `1` | Initial and minimum synchronous uWSGI workers |
+| `MAX_WEB_CONCURRENCY` | `3` | Maximum workers (1–3); set equal to `WEB_CONCURRENCY` for fixed concurrency |
+| `UWSGI_CHEAPER_RSS_LIMIT_SOFT` | unset | Optional total worker RSS threshold in bytes that blocks further spawning |
 | `LSH_CANDIDATES` | `100` | Images shortlisted by LSH before expanding their card IDs to all editions |
 | `TIMING_LOGS` | `0` | Set to `1` for JSON stage timings in server logs |
 | `INDEX_FILE` | `card_index.pkl` | Optional existing index path |
 
-Gunicorn reads `gunicorn.conf.py`. Do not add `--preload`: OpenCV objects, LSH
-indexes, and thread pools must be created inside each worker. Each worker has its
-own index and memory footprint. The pool size follows `os.cpu_count()` just as in
-the original implementation; Docker CPU quotas may be smaller than this count.
-No `cv2.setNumThreads()` override is applied. `WEB_CONCURRENCY` configures HTTP
-worker processes, not a CPU cap. Revert the environment settings or image to roll
-back; the index is unchanged.
+Docker runs `python serve.py`, a small launcher that validates the concurrency
+range and replaces itself with uWSGI using `os.execvp`. There is no custom scaling
+controller. uWSGI serves HTTP directly on port 5000 with `uwsgi.ini`, so the
+existing reverse proxy can continue forwarding HTTP.
+
+The `busyness` algorithm samples worker utilization over 15 seconds. Above 70%
+average utilization it can add one worker; below 20% it waits about three minutes
+before removing one. The delay can grow when workers are repeatedly stopped and
+respawned. A queue exceeding 33 connections, or staying nonempty for 15 seconds,
+can also add one worker. New workers must load the index and build LSH before
+serving requests. The ceiling remains three, including these backlog responses.
+See [uWSGI cheaper documentation](https://uwsgi.readthedocs.io/en/latest/Cheaper.html).
+
+Keep `lazy-apps = true` so OpenCV objects, LSH indexes, and thread pools are created
+inside each worker after fork. Keep `enable-threads = true` so the application's
+matching pool runs. Each worker handles one HTTP request at a time. The pool size
+still follows `os.cpu_count()` and OpenCV's default parallelism is retained.
+
+Each worker retains its own index. The optional `UWSGI_CHEAPER_RSS_LIMIT_SOFT`
+uses the current sum of worker RSS, not container headroom or a reservation for
+the next worker. Leave room below the Docker memory limit for another worker's
+startup peak, the master, and other container memory. This threshold is disabled
+unless configured; Docker enforces the actual memory limit. The previous custom
+scaler's `SCALE_*` and `WORKER_MEMORY_RESERVE_MB` settings no longer apply.
+
+Requests have a 60-second uWSGI harakiri timeout. The image uses `STOPSIGNAL SIGHUP`
+with `exit-on-reload` for graceful shutdown; SIGTERM performs an immediate stop.
+Workers have 65 seconds to finish during scale-down/graceful shutdown; use
+`docker stop --time 70` (or an equivalent deployment stop timeout, preserving the
+image's stop signal) to let this grace period complete. Application scan/timing logs and
+uWSGI scaling logs go to container output; routine HTTP access logging is disabled.
+
+`python server.py` remains the development server, including on Windows. Production
+uWSGI is installed only on Linux. `serve.py` accepts an optional WSGI module argument
+for diagnostics; it does not accept Gunicorn CLI flags or `GUNICORN_CMD_ARGS`.
+Restart the container after changing configuration. No card-index rebuild is
+required by this server migration.
 
 There is no search-mode environment setting, web selector, or request-level
 mode override; `/scan`
@@ -33,7 +66,7 @@ Each stage reports `wallMs` and process `cpuMs`; fallback searches accumulate in
 the same stage counters. Request time includes JSON parsing, decoding, matching,
 and response construction, but excludes time queued before Flask, network
 transfer, and frontend metadata requests. Process CPU includes all matching
-threads. Use synchronous Gunicorn workers for interpretable per-request CPU
+threads. Use synchronous uWSGI workers for interpretable per-request CPU
 accounting; concurrent development-server requests can overlap process counters.
 
 ## LSH behavior
@@ -128,8 +161,8 @@ docker run --rm --cpus 4 \
 # HTTP workload: repeat for cpus=3 and cpus=4 (LSH with exhaustive fallback).
 docker run -d --name vtes-perf --cpus 3 -p 127.0.0.1:5055:5000 \
   -v "$PWD:/app:ro" -w /app \
-  -e WEB_CONCURRENCY=2 -e TIMING_LOGS=1 \
-  vtes-scanner:benchmark-base gunicorn --config gunicorn.conf.py server:app
+  -e WEB_CONCURRENCY=1 -e MAX_WEB_CONCURRENCY=1 -e TIMING_LOGS=1 \
+  vtes-scanner:benchmark-base python serve.py
 curl --fail http://localhost:5055/status
 
 python benchmark.py --url http://localhost:5055 --container vtes-perf \
@@ -139,9 +172,13 @@ python benchmark.py --url http://localhost:5055 --container vtes-perf \
   --manifest .local-http-3cpu-lsh/manifest.json --concurrency 2 \
   --output .local-http-3cpu-lsh
 docker logs vtes-perf
-docker stop vtes-perf
+docker stop --time 70 vtes-perf
 docker rm vtes-perf
 ```
+
+For an autoscaling experiment, set `MAX_WEB_CONCURRENCY=3`, use sustained concurrent
+requests, and include worker startup and scale-down delay in the observation period.
+For fixed two- or three-worker comparisons, set both concurrency variables equally.
 
 Wait for `/status` to report ready before measuring. LSH uses 100 preliminary
 candidates by default; adjust with `-e LSH_CANDIDATES=100` if needed. Use separate
@@ -151,8 +188,9 @@ peak memory is the container lifetime high-water mark, including startup/warmup
 and filesystem cache. Start a fresh container for independent memory comparisons.
 Without this option HTTP CPU/memory are unavailable, not zero.
 
-HTTP runs issue two simultaneous warmup requests before measurement to exercise
-both default Gunicorn workers; direct matcher runs use one warmup scan.
+HTTP runs issue two simultaneous warmup requests before measurement, supporting
+comparisons with two workers. With the default single worker, these requests are
+handled sequentially; direct matcher runs use one warmup scan.
 
 Run concurrent client requests even with one worker: that measures actual queueing
 on a constrained VPS. Do not run other benchmark configurations simultaneously.

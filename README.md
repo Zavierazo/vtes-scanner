@@ -12,6 +12,8 @@ Web application that uses the camera to identify Vampire: The Eternal Struggle (
 
 - Python 3.8+
 - Git (optional)
+- On Linux, a C compiler and Python development headers to build uWSGI when
+  installing dependencies directly. Docker supplies its own build environment.
 
 ## Setup
 
@@ -85,7 +87,13 @@ Not-found response:
 
 ## Docker
 
-The default is two synchronous Gunicorn workers. Matching uses all detected CPUs
+Docker uses uWSGI's built-in `cheaper` mode, starting one synchronous worker and
+scaling up to three as utilization or queued connections increase. It scales back
+down after roughly three minutes of low utilization. Set `MAX_WEB_CONCURRENCY=1` to keep one worker,
+or set both `WEB_CONCURRENCY` and `MAX_WEB_CONCURRENCY` to the same number for fixed
+concurrency. Each added worker loads its own index; an optional
+`UWSGI_CHEAPER_RSS_LIMIT_SOFT` threshold can block further spawning based on total
+worker RSS. Matching uses all detected CPUs
 and OpenCV's default parallelism; CPU limits belong in Docker. See [PERFORMANCE.md](PERFORMANCE.md) for configuration, optional
 stage timing logs, the LSH candidate search, and reproducible
 accuracy/CPU benchmarks. LSH candidate search is always enabled, with exhaustive fallback; no index rebuild is
@@ -97,6 +105,10 @@ A `Dockerfile` is present for container usage:
 docker build -t vtes-scanner .
 docker run -p 5000:5000 -v C:\path\to\card_index.pkl:/app/card_index.pkl vtes-scanner
 ```
+
+Use a container stop timeout of at least 70 seconds to allow active scans to finish.
+The Docker build compiles uWSGI separately and excludes build tools from the runtime
+image. Native Windows development continues to use `python server.py`.
 
 ## Notes & Limitations
 
